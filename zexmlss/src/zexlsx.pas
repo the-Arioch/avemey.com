@@ -115,14 +115,25 @@ function ZEXSLXReadComments(var XMLSS: TZEXMLSS; var Stream: TStream): boolean;
 function ZEXLSXCreateStyles(var XMLSS: TZEXMLSS; Stream: TStream; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
 function ZEXLSXCreateWorkBook(var XMLSS: TZEXMLSS; Stream: TStream; const _pages: TIntegerDynArray;
                               const _names: TStringDynArray; PageCount: integer; TextConverter: TAnsiToCPConverter; CodePageName: String; BOM: ansistring): integer;
-function ZEXLSXCreateSheet(var XMLSS: TZEXMLSS; Stream: TStream; SheetNum: integer; TextConverter: TAnsiToCPConverter; CodePageName: String; BOM: ansistring; out isHaveComments: boolean): integer;
-function ZEXLSXCreateContentTypes(var XMLSS: TZEXMLSS; Stream: TStream; PageCount: integer; CommentCount: integer; const PagesComments: TIntegerDynArray;
-
-                                  TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
+function ZEXLSXCreateSheet(var XMLSS: TZEXMLSS; Stream: TStream; SheetNum: integer; TextConverter: TAnsiToCPConverter; CodePageName: String; BOM: ansistring;
+                              out isHaveComments: boolean; const CommentsFile: TStream = nil;
+                              const RelationURLs: TStrings = nil): integer;
+function ZEXLSXCreateContentTypes(var XMLSS: TZEXMLSS; Stream: TStream; PageCount: integer;
+                                    const PagesRels, PagesComments: TBooleanDynArray;
+                                    const TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
 function ZEXLSXCreateRelsMain(Stream: TStream; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
 function ZEXLSXCreateSharedStrings(var XMLSS: TZEXMLSS; Stream: TStream; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
 function ZEXLSXCreateDocPropsApp(Stream: TStream; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
 function ZEXLSXCreateDocPropsCore(var XMLSS: TZEXMLSS; Stream: TStream; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
+
+
+function ZEXLSXNewXml(const datasink: TStream;
+         const TextConverter: TAnsiToCPConverter = nil): TZsspXMLWriterH;
+function ZEXLSXNewXmlWithHeader(const datasink: TStream;
+         const CharSet : string; const BOM: AnsiString;
+         const TextConverter: TAnsiToCPConverter = nil): TZsspXMLWriterH;
+function ZEXLSXNewRelations(datasink: TStream; TextConverter: TAnsiToCPConverter;
+                          const CharSet: string; const BOM: ansistring): TZsspXMLWriterH;
 
 implementation uses
 {$IfDef DELPHI_UNICODE}
@@ -533,35 +544,59 @@ end;
 //  const name: string - текст отношения
 //RETURN
 //      integer - номер отношения. -1 - не определено
+Const XLSXRelationTypes: array [0..8] of string = (
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet',
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles',
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings',
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument',
+  'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties',
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties',
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments',
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing' );
+
 function ZEXLSXGetRelationNumber(const name: string): integer;
+var i: integer; s: string;
 begin
-  result := -1;
-  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet') then
-    result := 0
-  else
-  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles') then
-    result := 1
-  else
-  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings') then
-    result := 2
-  else
-  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument') then
-    result := 3
-  else
-  if (name = 'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties') then
-    result := 4
-  else
-  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties') then
-    result := 5
-  else
-  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink') then
-    result := 6
-  else
-  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments') then
-    result := 7
-  else
-  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing') then
-    result := 8;        
+  Result := -1;
+
+  //given the strings, if not hashing, then better search by the tail;
+  s := RightStr(name, 16);
+
+  for i := Low(XLSXRelationTypes) to High(XLSXRelationTypes) do
+    if AnsiEndsText(s, XLSXRelationTypes[i]) then
+       if name = XLSXRelationTypes[i] then
+          begin
+            Result := i;
+            Exit;
+          end;
+
+//  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet') then
+//    result := 0
+//  else
+//  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles') then
+//    result := 1
+//  else
+//  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings') then
+//    result := 2
+//  else
+//  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument') then
+//    result := 3
+//  else
+//  if (name = 'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties') then
+//    result := 4
+//  else
+//  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties') then
+//    result := 5
+//  else
+//  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink') then
+//    result := 6
+//  else
+//  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments') then
+//    result := 7
+//  else
+//  if (name = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing') then
+//    result := 8;
 end; //ZEXLSXGetRelationNumber
 
 //Возвращает текст Relations для rels
@@ -572,26 +607,32 @@ end; //ZEXLSXGetRelationNumber
 function ZEXLSXGetRelationName(num: integer): string;
 begin
   result := '';
-  case num of
-    0: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet';
-    1: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
-    2: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings';
-    3: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
-    4: result := 'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties';
-    5: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties';
-    6: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
-    7: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
-    8: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing';
-  end;
+
+  if (num <= High(XLSXRelationTypes)) and (num >= Low (XLSXRelationTypes))
+     then result := XLSXRelationTypes[num];
+
+//  case num of
+//    0: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet';
+//    1: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+//    2: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings';
+//    3: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+//    4: result := 'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties';
+//    5: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties';
+//    6: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
+//    7: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
+//    8: result := 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing';
+//  end;
 end; //ZEXLSXGetRelationName
 
 //BooleanToStr для XLSX //TODO: потом заменить
 function XLSXBoolToStr(value: boolean): string;
 begin
-  if (value) then
-    result := 'true'
-  else
-    result := 'false';
+  Result := IfThen(value, 'true', 'false');
+//
+//  if (value) then
+//    result := 'true'
+//  else
+//    result := 'false';
 end;
 
 //Читает тему (themeXXX.xml)
@@ -3147,14 +3188,16 @@ end; //ReadXLSX
 //    Stream: TStream                   - поток для записи
 //    TextConverter: TAnsiToCPConverter - конвертер из локальной кодировки в нужную
 //    PageCount: integer                - кол-во страниц
-//    CommentCount: integer             - кол-во страниц с комментариями
-//  const PagesComments: TIntegerDynArray- номера страниц с комментариями (нумеряция с нуля)
+//    ---CommentCount: integer             - кол-во страниц с комментариями
+//    ---const PagesComments: TIntegerDynArray- номера страниц с комментариями (нумеряция с нуля)
 //    CodePageName: string              - название кодовой страници
 //    BOM: ansistring                   - BOM
 //RETURN
 //      integer
-function ZEXLSXCreateContentTypes(var XMLSS: TZEXMLSS; Stream: TStream; PageCount: integer; CommentCount: integer; const PagesComments: TIntegerDynArray;
-                                  TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
+
+function ZEXLSXCreateContentTypes(var XMLSS: TZEXMLSS; Stream: TStream; PageCount: integer;
+                                    const PagesRels, PagesComments: TBooleanDynArray;
+                                    const TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
 var
   _xml: TZsspXMLWriterH;    //писатель
   s: string;
@@ -3186,13 +3229,15 @@ var
     //Страницы
     _WriteOverride('/_rels/.rels', 3);
     _WriteOverride('/xl/_rels/workbook.xml.rels', 3);
-    for i := 0 to PageCount - 1 do
+    for i := 0 to PageCount - 1 do begin
       _WriteOverride('/xl/worksheets/sheet' + IntToStr(i + 1) + '.xml', 0);
     //комментарии
-    for i := 0 to CommentCount - 1 do
-    begin
-      _WriteOverride('/xl/worksheets/_rels/sheet' + IntToStr(PagesComments[i] + 1) + '.xml.rels', 3);
-      _WriteOverride('/xl/comments' + IntToStr(PagesComments[i] + 1) + '.xml', 6);
+//    for i := 0 to CommentCount - 1 do
+//    begin
+      if High(PagesRels) >= i then if PagesRels[i] then
+          _WriteOverride('/xl/worksheets/_rels/sheet' + IntToStr(i + 1) + '.xml.rels', 3);
+      if High(PagesComments) >= i then if PagesComments[i] then
+          _WriteOverride('/xl/comments' + IntToStr(i + 1) + '.xml', 6); // Excel is pervert
     end;
     _WriteOverride('/xl/workbook.xml', 2);
     _WriteOverride('/xl/styles.xml', 1);
@@ -3201,6 +3246,9 @@ var
     _WriteOverride('/docProps/core.xml', 5);
   end; //_WriteTypes
 
+(* <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+   <Default Extension="xml" ContentType="application/xml"/>
+   ????  *)
 begin
   result := 0;
   _xml := nil;
@@ -3227,6 +3275,139 @@ begin
   end;
 end; //ZEXLSXCreateContentTypes
 
+
+type
+  TZXLSXCommentItem = class(TCollectionItem)
+      public
+        zcol, zrow: integer; // in ZXMLSS coords
+        AuthorId:   integer;
+        Text:       string;
+
+        function xlsxRef: string; // like "A1"
+        function Author: string;
+  end;
+
+  TZXLSXCommentsStore = class(TCollection)
+     private
+       Authors: TStrings;
+     public
+       TextConverter: TAnsiToCPConverter;
+       BOM: AnsiString;
+       CharSet: string;
+
+       Constructor Create;
+       function Add(const zcol, zrow: integer; const text, author: string): integer;
+       procedure BeforeDestruction; override;
+       Procedure SaveXML(const s: TStream);
+  end;
+
+
+{ TZXLSXCommentItem }
+
+function TZXLSXCommentItem.Author: string;
+begin
+  Result := '';
+  if AuthorId < 0 then exit;
+
+  Result := (Collection as TZXLSXCommentsStore).Authors[AuthorId];
+end;
+
+function TZXLSXCommentItem.xlsxRef: string;
+begin
+  Result := ZEGetA1byCol(zcol) + IntToStr(zrow + 1);
+end;
+
+{ TZXLSXCommentsStore }
+
+function TZXLSXCommentsStore.Add(const zcol, zrow: integer; const text,
+  author: string): integer;
+var item: TZXLSXCommentItem; a: string;
+begin
+  item := inherited Add as TZXLSXCommentItem;
+  Result := item.Index;
+
+  item.Text := text;
+  item.zcol := zcol;
+  item.zrow := zrow;
+
+  a := trim(author);
+  if a  = '' then item.AuthorId := -1 else begin
+    item.AuthorId := Authors.IndexOf(a); // case-insensitive, but that is typical for Win/Office
+    if item.AuthorId < 0 then
+       item.AuthorId := Authors.Add(a);
+  end;
+end;
+
+procedure TZXLSXCommentsStore.BeforeDestruction;
+begin
+  Authors.Free;
+  inherited;
+end;
+
+constructor TZXLSXCommentsStore.Create;
+begin
+  inherited Create(TZXLSXCommentItem);
+  Authors := TStringList.Create;
+end;
+
+procedure TZXLSXCommentsStore.SaveXML(const S: TStream);
+var _xml: TZsspXMLWriterH; i: integer;
+    x: TZXLSXCommentItem;
+begin
+  s.Position := 0;
+  _xml := TZsspXMLWriterH.Create();
+  try
+    _xml.TabLength := 1;
+    _xml.TextConverter := TextConverter;
+    _xml.TabSymbol := ' ';
+    if (not _xml.BeginSaveToStream(S)) then
+    begin
+      exit;  // Abort; ? Raise ... ?
+    end;
+
+    ZEWriteHeaderCommon(_xml, CharSet, BOM);
+
+    _xml.Attributes.Clear();
+//  x:comments xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main
+    _xml.Attributes.Add('xmlns:x', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+    _xml.WriteTagNode('x:comments', true, true, false);
+
+    _xml.Attributes.Clear();
+    _xml.WriteTagNode('x:authors', true, true, false);
+      for i := 0 to Authors.Count - 1 do begin
+        _xml.WriteTag('x:author', Authors[i]);
+      end;
+    _xml.WriteEndTagNode();
+
+    _xml.WriteTagNode('x:commentList', true, true, false);
+    for i := 0 to Count - 1 do begin
+        x := Items[i] as TZXLSXCommentItem;
+//    <x:comment ref="B2" authorId="0">
+        if x.AuthorId >= 0 then
+           _xml.Attributes.Add('authorId', IntToStr(x.AuthorId), false);
+        _xml.Attributes.Add('ref', x.xlsxRef, false);
+        _xml.WriteTagNode('x:comment');
+          _xml.Attributes.Clear();
+
+          _xml.WriteTagNode('x:text', True, False, False);
+            _xml.WriteTagNode('x:r', True, False, False);
+            //          <x:t xml:space="preserve">
+               _xml.Attributes.Add('xml:space', 'preserve');
+               _xml.WriteTag('x:t', x.Author +': ' + x.Text); // include Author - yes or now ?
+               _xml.Attributes.Clear;
+            _xml.WriteEndTagNode();
+          _xml.WriteEndTagNode();
+        _xml.WriteEndTagNode();
+    end;
+    _xml.WriteEndTagNode();
+
+    _xml.WriteEndTagNode();
+  finally
+    _xml.Free;
+  end;
+end;
+
+
 //Создаёт лист документа (sheet*.xml)
 //INPUT
 //  var XMLSS: TZEXMLSS                 - хранилище
@@ -3236,13 +3417,19 @@ end; //ZEXLSXCreateContentTypes
 //    CodePageName: string              - название кодовой страници
 //    BOM: ansistring                   - BOM
 //  var isHaveComments: boolean         - возвращает true, если были комментарии (чтобы создать comments*.xml)
+//    CommentsFile                      - потоки для создания соотв. файлa
+//    RelaionURLs                       - список rID = URL
 //RETURN
 //      integer
 function ZEXLSXCreateSheet(var XMLSS: TZEXMLSS; Stream: TStream; SheetNum: integer; TextConverter: TAnsiToCPConverter;
-                                     CodePageName: String; BOM: ansistring; out isHaveComments: boolean): integer;
+                                     CodePageName: String; BOM: ansistring;
+                                     out isHaveComments: boolean; const CommentsFile: TStream = nil;
+                                     const RelationURLs: TStrings = nil): integer;
 var
   _xml: TZsspXMLWriterH;    //писатель
   _sheet: TZSheet;
+
+  _comments: TZXLSXCommentsStore;
 
   {
   procedure _AddSelection(const _Cell, _Pane: string);
@@ -3360,12 +3547,14 @@ var
   var
     i, j, n: integer;
     b: boolean;
-    s: string;
+    s, u: string;
     _r: TRect;
     
   begin
     _xml.Attributes.Clear();
+    if RelationURLs <> nil then RelationURLs.Clear;
     _xml.WriteTagNode('sheetData', true, true, true);
+
     n := _sheet.ColCount - 1;
     for i := 0 to _sheet.RowCount - 1 do
     begin
@@ -3381,9 +3570,26 @@ var
       for j := 0 to n do
       begin
         _xml.Attributes.Clear();
-        if (not isHaveComments) then
-          if (length(_sheet.Cell[j, i].Comment) > 0) then
-            isHaveComments := true;
+        if (length(_sheet.Cell[j, i].Comment) > 0) then begin
+          if (not isHaveComments) then begin
+             isHaveComments := true;
+             if CommentsFile <> nil then begin
+               _comments := TZXLSXCommentsStore.Create;
+               _comments.BOM := BOM;
+               _comments.CharSet := CodePageName;
+               _comments.TextConverter :=TextConverter;
+             end;
+          end;
+          if _comments <> nil then
+             _comments.Add(j, i, _sheet.Cell[j, i].Comment, _sheet.Cell[j, i].CommentAuthor)
+        end;  // Comment
+
+        if _sheet.Cell[j, i].HRef > '' then begin
+           if RelationURLs <> nil then
+              RelationURLs.Add(Format('rId_URL_%s%d=%s',
+                [ ZEGetA1byCol(j), i + 1, _sheet.Cell[j, i].HRef ]));
+        end; // HRef
+
         b := (length(_sheet.Cell[j, i].Data) > 0) or
              (length(_sheet.Cell[j, i].Formula) > 0);
         _xml.Attributes.Add('r', ZEGetA1byCol(j) + IntToStr(i + 1));
@@ -3441,6 +3647,28 @@ var
       end;
       _xml.WriteEndTagNode(); //mergeCells
     end; //if
+
+    if RelationURLs <> nil then
+       if RelationURLs.Count > 0 then begin
+         _xml.Attributes.Clear();
+         _xml.WriteTagNode('hyperlinks', true, true, false);
+          for i := 0 to RelationURLs.Count - 1 do begin
+              u := RelationURLs[i]; // ValuesForIndex appeared i JCL and later Delphi only
+              s := RelationURLs.Names[i]; // rId_URL_A1
+              Delete(u, 1, Length(s)+1); // URL
+
+              _xml.Attributes.Clear();
+              _xml.Attributes.Add('r:id',s,false);
+              _xml.Attributes.Add('display',u,false);
+              Delete(s, 1, Length('rId_URL_'));  // A1
+              _xml.Attributes.Add('ref',s,false);
+              _xml.WriteEmptyTag('hyperlink');
+          end;
+
+         _xml.Attributes.Clear();
+         _xml.WriteEndTagNode();
+       end; // saving URLs in sheet
+
   end; //WriteXLSXSheetData
 
   procedure WriteXLSXSheetFooter();
@@ -3504,6 +3732,7 @@ begin
   isHaveComments := false;
   result := 0;
   _xml := nil;
+  _comments := nil;
   try
     _xml := TZsspXMLWriterH.Create();
     _xml.TabLength := 1;
@@ -3529,9 +3758,14 @@ begin
     WriteXLSXSheetFooter();
 
     _xml.WriteEndTagNode(); //worksheet
+
+    if _comments <> nil then
+       if CommentsFile <> nil then begin // double check
+          _comments.SaveXML(CommentsFile);
+       end;
   finally
-    if (Assigned(_xml)) then
-      FreeAndNil(_xml);
+    _xml.Free;
+    _comments.Free;
   end;
 end; //ZEXLSXCreateSheet
 
@@ -4244,8 +4478,55 @@ begin
   xml.Attributes.Add('Id', rid);
   xml.Attributes.Add('Type',  ZEXLSXGetRelationName(ridType), false);
   xml.Attributes.Add('Target', Target, false);
+  if ridType = 6 then // URL
+     xml.Attributes.Add('TargetMode','External');
   xml.WriteEmptyTag('Relationship', true, true);
 end; //ZEAddRelsID
+
+function ZEXLSXNewXml(const datasink: TStream;
+         const TextConverter: TAnsiToCPConverter = nil): TZsspXMLWriterH;
+var  _xml: TZsspXMLWriterH;
+begin
+  Result := nil;
+  _xml := TZsspXMLWriterH.Create();
+  try
+    _xml.TabLength := 1;
+    _xml.TextConverter := TextConverter;
+    _xml.TabSymbol := ' ';
+    if (not _xml.BeginSaveToStream(datasink)) then begin
+       _xml.Free;
+       exit;
+    end;
+    _xml.Attributes.Clear();
+  except
+    _xml.Free;
+  end;
+  Result := _xml;
+end;
+
+function ZEXLSXNewXmlWithHeader(const datasink: TStream;
+         const CharSet : string; const BOM: AnsiString;
+         const TextConverter: TAnsiToCPConverter = nil): TZsspXMLWriterH;
+begin
+  Result := ZEXLSXNewXml(datasink, TextConverter);
+  if Result <> nil then try
+    ZEWriteHeaderCommon(Result, CharSet, BOM);
+  except
+    FreeAndNil(Result);
+  end;
+end;
+
+function ZEXLSXNewRelations(datasink: TStream; TextConverter: TAnsiToCPConverter;
+                          const CharSet: string; const BOM: ansistring): TZsspXMLWriterH;
+begin
+  Result := ZEXLSXNewXmlWithHeader(datasink, CharSet, BOM, TextConverter);
+  if Result <> nil then try
+     Result.Attributes.Add('xmlns', 'http://schemas.openxmlformats.org/package/2006/relationships');
+     Result.WriteTagNode('Relationships', true, true, false);
+  except
+     FreeAndNil(Result);
+  end;
+end;
 
 //Создаёт _rels/.rels
 //INPUT
@@ -4255,28 +4536,33 @@ end; //ZEAddRelsID
 //    BOM: ansistring                   - BOM
 //RETURN
 //      integer
+
 function ZEXLSXCreateRelsMain(Stream: TStream; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
 var
   _xml: TZsspXMLWriterH;
 
 begin
-  result := 0;
-  _xml := nil;
-  try
-    _xml := TZsspXMLWriterH.Create();
-    _xml.TabLength := 1;
-    _xml.TextConverter := TextConverter;
-    _xml.TabSymbol := ' ';
-    if (not _xml.BeginSaveToStream(Stream)) then
-    begin
-      result := 2;
-      exit;
-    end;
+  result := 2;
+//  _xml := nil;
+  _xml := ZEXLSXNewRelations(Stream, TextConverter, CodePageName, BOM);
+  if _xml = nil then exit;
 
-    ZEWriteHeaderCommon(_xml, CodePageName, BOM);
-    _xml.Attributes.Clear();
-    _xml.Attributes.Add('xmlns', 'http://schemas.openxmlformats.org/package/2006/relationships');
-    _xml.WriteTagNode('Relationships', true, true, false);
+  Result := 0;
+  try
+//    _xml := TZsspXMLWriterH.Create();
+//    _xml.TabLength := 1;
+//    _xml.TextConverter := TextConverter;
+//    _xml.TabSymbol := ' ';
+//    if (not _xml.BeginSaveToStream(Stream)) then ==> if _xml = nil then
+//    begin
+//      result := 2;
+//      exit;
+//    end;
+
+//    ZEWriteHeaderCommon(_xml, CodePageName, BOM);
+//    _xml.Attributes.Clear();
+//    _xml.Attributes.Add('xmlns', 'http://schemas.openxmlformats.org/package/2006/relationships');
+//    _xml.WriteTagNode('Relationships', true, true, false);
 
     ZEAddRelsRelation(_xml, 'rId1', 3, 'xl/workbook.xml');
     ZEAddRelsRelation(_xml, 'rId2', 5, 'docProps/app.xml');
@@ -4285,8 +4571,7 @@ begin
     _xml.WriteEndTagNode(); //Relationships
 
   finally
-    if (Assigned(_xml)) then
-      FreeAndNil(_xml);
+    _xml.Free;
   end;
 end; //ZEXLSXCreateRelsMain
 
@@ -4299,29 +4584,33 @@ end; //ZEXLSXCreateRelsMain
 //    BOM: ansistring                   - BOM
 //RETURN
 //      integer
-function ZEXLSXCreateRelsWorkBook(PageCount: integer; Stream: TStream; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
+function ZEXLSXCreateRelsWorkBook(PageCount: integer; Stream: TStream; TextConverter: TAnsiToCPConverter;
+                                             CodePageName: string; BOM: ansistring): integer;
 var
   _xml: TZsspXMLWriterH;
   i: integer;
 
 begin
-  result := 0;
-  _xml := nil;
-  try
-    _xml := TZsspXMLWriterH.Create();
-    _xml.TabLength := 1;
-    _xml.TextConverter := TextConverter;
-    _xml.TabSymbol := ' ';
-    if (not _xml.BeginSaveToStream(Stream)) then
-    begin
-      result := 2;
-      exit;
-    end;
+  result := 2;
+  _xml := {nil;} ZEXLSXNewRelations(Stream, TextConverter, CodePageName, BOM);
+  if _xml = nil then exit;
 
-    ZEWriteHeaderCommon(_xml, CodePageName, BOM);
-    _xml.Attributes.Clear();
-    _xml.Attributes.Add('xmlns', 'http://schemas.openxmlformats.org/package/2006/relationships');
-    _xml.WriteTagNode('Relationships', true, true, false);
+  result := 0;
+  try
+//    _xml := TZsspXMLWriterH.Create();
+//    _xml.TabLength := 1;
+//    _xml.TextConverter := TextConverter;
+//    _xml.TabSymbol := ' ';
+//    if (not _xml.BeginSaveToStream(Stream)) then
+//    begin
+//      result := 2;
+//      exit;
+//    end;
+//
+//    ZEWriteHeaderCommon(_xml, CodePageName, BOM);
+//    _xml.Attributes.Clear();
+//    _xml.Attributes.Add('xmlns', 'http://schemas.openxmlformats.org/package/2006/relationships');
+//    _xml.WriteTagNode('Relationships', true, true, false);
 
     ZEAddRelsRelation(_xml, 'rId1', 1, 'styles.xml');
 
@@ -4508,11 +4797,17 @@ function ExportXmlssToXLSX(var XMLSS: TZEXMLSS; PathName: string; const SheetsNu
 var
   _pages: TIntegerDynArray;      //номера страниц
   _names: TStringDynArray;      //названия страниц
-  kol, i: integer;
+  kol, i, r: integer;
   Stream: TStream;
-  need_comments: boolean;
+  s, u: string;
+
+  need_comments: boolean; data_comments: TStream;
+  ref_URLs: TStrings;
+  _sheet_ref: TZsspXMLWriterH;  _sheet_ref_Stream: TStream;
+  RelsFlags, CommentFlags: TBooleanDynArray;
+
   path_xl, path_sheets, path_relsmain, path_relsw, path_docprops: string;
-  _commentArray: TIntegerDynArray;
+//  _commentArray: TIntegerDynArray;
 
   azg: TZxZipGen; // Actual Zip Generator
 
@@ -4521,6 +4816,7 @@ begin
   Stream := nil;
   kol := 0;
   need_comments := false;
+  ref_URLs := nil;
 
   azg := nil;
   try
@@ -4571,7 +4867,7 @@ begin
     ZEXLSXCreateRelsMain(Stream, TextConverter, CodePageName, BOM);
     azg.SealStream(Stream);   Stream := nil;
 
-    // xl/_rels/workbook.xml.rels 
+    // xl/_rels/workbook.xml.rels
     path_relsw := path_xl + {PathDelim +} '_rels' + PathDelim;
 //    if (not DirectoryExists(path_relsw)) then
 //      ForceDirectories(path_relsw);
@@ -4583,23 +4879,61 @@ begin
 //    if (not DirectoryExists(path_sheets)) then
 //      ForceDirectories(path_sheets);
 
-    SetLength(_commentArray, kol);
+    SetLength(RelsFlags, kol);
+    SetLength(CommentFlags, kol);
 
     //Листы документа
     for i := 0 to kol - 1 do
     begin
-      _commentArray[i] := 0;
-      Stream := azg.NewStream(path_sheets + 'sheet' + IntToStr(i + 1) + '.xml');
-      ZEXLSXCreateSheet(XMLSS, Stream, _pages[i], TextConverter, CodePageName, BOM, need_comments);
-      if (need_comments) then
-        _commentArray[i] := 1;
-      azg.SealStream(Stream);   Stream := nil;
+      CommentFlags[i] := false;
+      RelsFlags[i] := false;
 
-      if (need_comments) then
-      begin
-        _commentArray[i] := 1;
-        //создать файл с комментариями
-      end;  
+      data_comments := TMemoryStream.Create;
+      ref_URLs := TStringList.Create;
+      Stream := azg.NewStream(path_sheets + 'sheet' + IntToStr(i + 1) + '.xml');
+      try
+        ZEXLSXCreateSheet(XMLSS, Stream, _pages[i], TextConverter, CodePageName,
+                             BOM, need_comments, data_comments, ref_URLs);
+        azg.SealStream(Stream);   Stream := nil;
+
+        _sheet_ref := nil; _sheet_ref_Stream := nil;
+        if need_comments or (ref_URLs.Count > 0) then begin
+           _sheet_ref_Stream := azg.NewStream(path_sheets + '_rels' + PathDelim + 'sheet' + IntToStr(i + 1) + '.xml.rels');
+           _sheet_ref := ZEXLSXNewRelations(_sheet_ref_Stream, TextConverter, CodePageName, BOM);
+        end;
+
+        if (need_comments) then
+        begin
+//          _commentArray[i] := 1;
+          CommentFlags[i] := true;
+          //создать файл с комментариями
+          s := 'comments' + IntToStr(i + 1) + '.xml';
+          Stream := azg.NewStream({path_sheets} path_xl + s);  // Excel is pervert
+          Stream.CopyFrom(data_comments, 0);
+          azg.SealStream(Stream); Stream := nil;
+
+          ZEAddRelsRelation(_sheet_ref, 'rId_cmt', 7, '../' + s); // Excel is pervert
+        end;
+
+        if ref_URLs.Count > 0 then
+           for r := 0 to ref_URLs.Count - 1 do begin
+               u := ref_URLs[r];
+               s := ref_URLs.Names[r];
+               Delete(u, 1, Length(s)+1); // TStringList.ValuesForIndex -> URL
+               ZEAddRelsRelation(_sheet_ref, s, 6, u);
+           end;
+
+        _sheet_ref.Free;
+        if _sheet_ref_Stream <> nil then begin
+           azg.SealStream(_sheet_ref_Stream);
+           _sheet_ref_Stream := nil;
+           RelsFlags[i] := true;
+        end;
+
+      finally
+        data_comments.Free;
+        ref_URLs.Free;
+      end;
     end; //for i
 
     //workbook.xml - список листов
@@ -4609,7 +4943,7 @@ begin
 
     //[Content_Types].xml
     Stream := azg.NewStream({PathName +} '[Content_Types].xml');
-    ZEXLSXCreateContentTypes(XMLSS, Stream, kol, 0, nil, TextConverter, CodePageName, BOM);
+    ZEXLSXCreateContentTypes(XMLSS, Stream, kol, RelsFlags, CommentFlags, TextConverter, CodePageName, BOM);
     azg.SealStream(Stream);  Stream := nil;
 
     path_docprops := {PathName +} 'docProps' + PathDelim;
@@ -4631,8 +4965,8 @@ begin
     ZESClearArrays(_pages, _names);
     if (Assigned(Stream)) then
       FreeAndNil(Stream);
-    SetLength(_commentArray, 0);
-    _commentArray := nil;
+//    SetLength(_commentArray, 0);
+//    _commentArray := nil;
     azg.Free;
   end;
 end; //SaveXmlssToXLSXPath     //Сохраняет незапакованный документ в формате Office Open XML (OOXML)
@@ -4930,3 +5264,4 @@ end;
 {$ENDIF}
 
 end.
+
