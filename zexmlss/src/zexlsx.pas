@@ -8,6 +8,16 @@
 //----------------------------------------------------------------
 // Modified by the_Arioch@nm.ru - uniform save API for creating
 //     XLSX files in Delphi/Windows
+
+// As of 08.02.2013 this unit can save comments and URLs into XLSX but
+// 1) URLs are not editable but clickable. Enougth for reports (URL titleis not supported)
+// 2) comments are ignored by Excel unless VML object to show them wascoded as well:
+// 2.1) [Content_Types] should describe .vml files or extension
+// 2.2) \xl\worksheets\_rels\sheet1.xml.rels holds link to VMLs
+// 2.3) \xl\drawings\vmlDrawing1.vml containst arrows, boxes, fonts et all  (Oooh!)
+// 2.3.1) the file also spicifies if the not is always visible or only on mouse hover
+// 2.4) that is linked via <legacyDrawing r:id="rId3"/></worksheet> in sheet1.xml
+
 {
  Copyright (C) 2012 Ruslan Neborak
 
@@ -3182,7 +3192,7 @@ end; //ReadXLSX
 /////////////                    запись                         /////////////
 /////////////////////////////////////////////////////////////////////////////
 
-//Создаёт [Content_Types].xml 
+//Создаёт [Content_Types].xml
 //INPUT
 //  var XMLSS: TZEXMLSS                 - хранилище
 //    Stream: TStream                   - поток для записи
@@ -3195,31 +3205,53 @@ end; //ReadXLSX
 //RETURN
 //      integer
 
+const XLSXContentTypes: array [-2..8] of string = (  //TODO enumeration type
+ {def "bin"} 'application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings',
+ {def "xml"} 'application/xml',
+
+  {0: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml',
+  {1: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml',
+  {2: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml',
+  {3: s :=} 'application/vnd.openxmlformats-package.relationships+xml',
+  {4: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml',
+  {5: s :=} 'application/vnd.openxmlformats-package.core-properties+xml',
+  {6: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml',
+  {7: s :=} 'application/vnd.openxmlformats-officedocument.vmlDrawing',
+  {8: s :=} 'application/vnd.openxmlformats-officedocument.extended-properties+xml'
+);
+
 function ZEXLSXCreateContentTypes(var XMLSS: TZEXMLSS; Stream: TStream; PageCount: integer;
                                     const PagesRels, PagesComments: TBooleanDynArray;
                                     const TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
 var
   _xml: TZsspXMLWriterH;    //писатель
-  s: string;
+ // s: string;
 
-  procedure _WriteOverride(const PartName: string; ct: integer);
+  procedure _WriteOverride(const PartName: string; ct: integer); var s: string;
   begin
-    _xml.Attributes.Clear();
-    _xml.Attributes.Add('PartName', PartName);
-    case ct of
-      0: s := 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml';
-      1: s := 'application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml';
-      2: s := 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml';
-      3: s := 'application/vnd.openxmlformats-package.relationships+xml';
-      4: s := 'application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml';
-      5: s := 'application/vnd.openxmlformats-package.core-properties+xml';
-      6: s := 'application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml';
-      7: s := 'application/vnd.openxmlformats-officedocument.vmlDrawing';
-      8: s := 'application/vnd.openxmlformats-officedocument.extended-properties+xml';
+    if (ct>=Low(XLSXContentTypes)) and (ct<=High(XLSXContentTypes)) then begin
+      _xml.Attributes.Clear();
+      _xml.Attributes.Add('PartName', PartName);
+      s := XLSXContentTypes[ct];
+      _xml.Attributes.Add('ContentType', s, false);
+      _xml.WriteEmptyTag('Override', true);
     end;
-    _xml.Attributes.Add('ContentType', s, false);
-    _xml.WriteEmptyTag('Override', true);
   end; //_WriteOverride
+
+//<Default Extension="bin" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings"/>
+//<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+//<Default Extension="xml" ContentType="application/xml"/>
+//<Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>
+  procedure _WriteDefault(const ext: string; ct: integer); var s: string;
+  begin
+    if (ct>=Low(XLSXContentTypes)) and (ct<=High(XLSXContentTypes)) then begin
+      _xml.Attributes.Clear();
+      s := XLSXContentTypes[ct];
+      _xml.Attributes.Add('ContentType', s, false);
+      _xml.Attributes.Add('Extension', ext);
+      _xml.WriteEmptyTag('Default', true);
+    end;
+  end; //_WriteDefault
 
   procedure _WriteTypes();
   var
@@ -3227,15 +3259,17 @@ var
 
   begin
     //Страницы
-    _WriteOverride('/_rels/.rels', 3);
-    _WriteOverride('/xl/_rels/workbook.xml.rels', 3);
+    _WriteDefault('vml',  7);  // as of Excel 2010 this replaces all
+    _WriteDefault('rels', 3);  // separate files specifications
+    _WriteDefault('bin', -2);
+    _WriteDefault('xml', -1);
+
+//    _WriteOverride('/_rels/.rels', 3);
+//    _WriteOverride('/xl/_rels/workbook.xml.rels', 3);
     for i := 0 to PageCount - 1 do begin
       _WriteOverride('/xl/worksheets/sheet' + IntToStr(i + 1) + '.xml', 0);
-    //комментарии
-//    for i := 0 to CommentCount - 1 do
-//    begin
-      if High(PagesRels) >= i then if PagesRels[i] then
-          _WriteOverride('/xl/worksheets/_rels/sheet' + IntToStr(i + 1) + '.xml.rels', 3);
+//      if High(PagesRels) >= i then if PagesRels[i] then
+//          _WriteOverride('/xl/worksheets/_rels/sheet' + IntToStr(i + 1) + '.xml.rels', 3);
       if High(PagesComments) >= i then if PagesComments[i] then
           _WriteOverride('/xl/comments' + IntToStr(i + 1) + '.xml', 6); // Excel is pervert
     end;
