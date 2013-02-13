@@ -45,7 +45,7 @@ const
 type
   //тип данных €чейки
   TZCellType = (ZENumber, ZEDateTime, ZEBoolean, ZEString, ZEError);
-      const ZEAnsiString = ZEString deprecated 'use ZEString'; // backward compatibility
+      const ZEAnsiString = ZEString deprecated {$IfDef Delhpi_Unicode} 'use ZEString' {$EndIf}; // backward compatibility
 type
   //—тиль начертани€ линий рамки €чейки
   TZBorderType = (ZENone, ZEContinuous, ZEDot, ZEDash, ZEDashDot, ZEDashDotDot,ZESlantDashDot, ZEDouble);
