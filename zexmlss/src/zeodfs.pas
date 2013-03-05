@@ -47,7 +47,7 @@ interface
 uses
   SysUtils, Graphics, Classes, Types, 
   zsspxml, zexmlss, zesavecommon, zeZippy
-  {$IFDEF FPC},zipper {$ELSE}{$I odszipuses.inc}{$ENDIF};
+  {$IFDEF FPC},zipper{$ENDIF};
 
 //Сохраняет незапакованный документ в формате Open Document
 function SaveXmlssToODFSPath(var XMLSS: TZEXMLSS; PathName: string; const SheetsNumbers:array of integer;
@@ -68,10 +68,6 @@ function ReadODFSPath(var XMLSS: TZEXMLSS; DirName: string): integer;
 
 {$IFDEF FPC}
 function ReadODFS(var XMLSS: TZEXMLSS; FileName: string): integer;
-{$ENDIF}
-
-{$IFNDEF FPC}
-{$I odszipfunc.inc}
 {$ENDIF}
 
 //////////////////// Дополнительные функции, если понадобится читать/писать отдельные файлы или ещё для чего
@@ -2699,8 +2695,8 @@ begin
 end; //ReadODFS
 {$ENDIF}
 
-{$IFNDEF FPC}
-{$I odszipfuncimpl.inc}
-{$ENDIF}
+//{$IFNDEF FPC}
+//{$I odszipfuncimpl.inc}
+//{$ENDIF}
 
 end.

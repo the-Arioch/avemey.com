@@ -62,7 +62,7 @@ uses
   ,LCLType,
   LResources
   {$ENDIF}
-  {$IFDEF FPC},zipper{$ELSE}{$I xlsxzipuses.inc}{$ENDIF};
+  {$IFDEF FPC},zipper{$ENDIF};
 
 type
   TZXLSXFileItem = record
@@ -101,9 +101,9 @@ function SaveXmlssToXLSX(var XMLSS: TZEXMLSS; FileName: string; const SheetsNumb
                          const SheetsNames: array of string; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring = ''): integer;
 {$ENDIF}
 
-{$IFNDEF FPC}
-{$I xlsxzipfunc.inc}
-{$ENDIF}
+//{$IFNDEF FPC}
+//{$I xlsxzipfunc.inc}
+//{$ENDIF}
 
 function ExportXmlssToXLSX(var XMLSS: TZEXMLSS; PathName: string; const SheetsNumbers: array of integer;
                          const SheetsNames: array of string; TextConverter: TAnsiToCPConverter; CodePageName: string;
@@ -5293,9 +5293,9 @@ begin
 end;
 {$ENDIF}
 
-{$IFNDEF FPC}
-{$I xlsxzipfuncimpl.inc}
-{$ENDIF}
+//{$IFNDEF FPC}
+//{$I xlsxzipfuncimpl.inc}
+//{$ENDIF}
 
 end.
 
