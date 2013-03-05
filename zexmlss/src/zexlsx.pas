@@ -4216,12 +4216,13 @@ var
     end;
     _border := XMLSS.Styles[StyleNum].Border[BorderNum];
     s1 := '';
+    if _border.Weight > 0 then
     case _border.LineStyle of
       ZEContinuous:
         begin
           //thin ??
           if (_border.Weight = 1) then
-            s1 := 'hair'
+            s1 := 'thin'; // 'hair'
           else
           if (_border.Weight = 2) then
             s1 := 'medium'
