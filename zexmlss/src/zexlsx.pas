@@ -10,12 +10,12 @@
 //     XLSX files in Delphi/Windows
 
 // As of 08.02.2013 this unit can save comments and URLs into XLSX but
-// 1) URLs are not editable but clickable. Enougth for reports (URL titleis not supported)
+// 1) URLs are not editable but clickable. Enough for reports (URL title is not supported)
 // 2) comments are ignored by Excel unless VML object to show them wascoded as well:
 // 2.1) [Content_Types] should describe .vml files or extension
 // 2.2) \xl\worksheets\_rels\sheet1.xml.rels holds link to VMLs
 // 2.3) \xl\drawings\vmlDrawing1.vml containst arrows, boxes, fonts et all  (Oooh!)
-// 2.3.1) the file also spicifies if the not is always visible or only on mouse hover
+// 2.3.1) the file also specifies if the comment is always visible or only on mouse hover
 // 2.4) that is linked via <legacyDrawing r:id="rId3"/></worksheet> in sheet1.xml
 
 {
@@ -40,8 +40,6 @@
     3. This notice may not be removed or altered from any source
     distribution.
 }
-//HINT: File should have name 'zexlsx.pas', but my hands ... :)
-//****************************************************************
 unit zexlsx;
 
 interface
@@ -3480,7 +3478,6 @@ var
   procedure WriteXLSXSheetHeader();
   var
     s: string;
-
   begin
     _xml.Attributes.Clear();
     _xml.Attributes.Add('filterMode', 'false');
@@ -3709,6 +3706,15 @@ var
   var
     s: string;
 
+    procedure EnlistError(const kind: TZCellValueWarning; const tag: string);
+    begin
+      if kind in XMLSS.SupressedCellWarnings then begin
+         _xml.Attributes.Clear();
+         _xml.Attributes.Add('sqref', s, False);
+         _xml.Attributes.Add(tag, '1', False);
+         _xml.WriteEmptyTag('ignoredError', True, False);
+      end;
+    end;
   begin
     _xml.Attributes.Clear();
     _xml.Attributes.Add('headings', 'false', false);
@@ -3760,6 +3766,16 @@ var
     //    <oddFooter> ... </oddFooter>
     //  </headerFooter>
     //  <legacyDrawing r:id="..."/>
+
+    if XMLSS.SupressedCellWarnings <> [] then try
+       _xml.WriteTagNode('ignoredErrors', [], True, True, False);
+       s := 'A1:' + ZEGetA1byCol(_sheet.ColCount - 1) + IntToStr(_sheet.RowCount);
+
+       EnlistError( zvw2DigitsYear, 'twoDigitTextYear' );
+       EnlistError( zvwNumbersAsText, 'numberStoredAsText' );
+    finally
+      _xml.WriteEndTagNode();
+    end;
   end; //WriteXLSXSheetFooter
 
 begin
@@ -4222,7 +4238,7 @@ var
         begin
           //thin ??
           if (_border.Weight = 1) then
-            s1 := 'thin'; // 'hair'
+            s1 := 'thin' // 'hair'
           else
           if (_border.Weight = 2) then
             s1 := 'medium'
