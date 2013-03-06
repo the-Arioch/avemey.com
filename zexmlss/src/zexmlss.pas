@@ -165,7 +165,7 @@ type
   ///    Nominative range is -90 .. +90, extended is -180 .. +180 (in degrees)
   ///       Extended range values can not be loaded by Microsoft Excel!
   /// XML SS specifications matches the nominative range.
-  /// OpenDocument 1.2 specification, atchign mathematics and SVG, permits FP
+  /// OpenDocument 1.2 specification, matching mathematics and SVG, permits FP
   ///    numbers in different unit (deg, grad, rad) with degrees by default;
   ///    practical implementations use non-negative integer numbers in 0..359 range.
   /// OfficeXML specification is the most perplexed
