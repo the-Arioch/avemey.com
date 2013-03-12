@@ -45,7 +45,7 @@ const
 type
   //тип данных ячейки
   TZCellType = (ZENumber, ZEDateTime, ZEBoolean, ZEString, ZEError);
-      const ZEAnsiString = ZEString deprecated 'use ZEString'; // backward compatibility
+      const ZEAnsiString = ZEString deprecated {$IfDef Delhpi_Unicode} 'use ZEString' {$EndIf}; // backward compatibility
 type
   //Стиль начертания линий рамки ячейки
   TZBorderType = (ZENone, ZEContinuous, ZEDot, ZEDash, ZEDashDot, ZEDashDotDot,ZESlantDashDot, ZEDouble);
@@ -143,6 +143,31 @@ type
     property DiagonalRight: TZBorderStyle index 5 read GetBorder write SetBorder;
   end;
 
+  /// Starting with Excel 2003 it makes some heuristics 'sanity checks' over cells' data
+  ///   and annoys user with warnings. This warnings can be supressed in XLS and XLSX formats
+  ///   but probably can not in XML-SS and in ODF formats.
+  /// In XLSX this supression can be made on cell/row/column/range/sheet levels.
+  ///   8 error checks are declared in XLSX specs: ECMA-376 Ed.4 Part 1 18.3.1.50 ignoredError
+  ///   and are protruded to Excel GUI
+  ///
+  /// Number Stored As Text is especially annoying, as many state nominators
+  ///   (like bank currency codes or phone numbers) are structures rather than numbers.
+  /// Also report-wide (workbook-wide) policy is practically enough for report generating purposes.
+  /// However future may ask for additional checks or more fine-grain control or other formats support.
+  ///  ~  ~  ~  ~  ~  ~  ~  ~  ~  ~  ~  ~  ~  ~  ~  ~
+  /// Начиная с Excel 2003 в таблицах проводится несколько оценочных проверок правдоподобности
+  ///   данных, которые потом навязчиво предлагаются пользователю.
+  /// Данные проверки можно отключать в форматах XLS и XLSX. В форматах XML-SS и ODF, видимо, нет.
+  /// В формате XLSX OpenXML предлагаются 8 типов оценок. Самая надоедливая - "число как текст",
+  ///   поскольку в отчётах встречаются поля из государственных классификаторов (напр. телефонные
+  ///   номера, коды валют, ИНН, КБК и т.д.), которые по сути являются структурами.
+  /// Для классификатора ОКВЭД типично срабатывание эфристики "дата текстом с 2-цифровым годом".
+  /// Для практического составления отчета нужно отключить эту надоедлалку на уровне всего отчёта - книги.
+  /// В будущем, возможно, будет полезно поддерживать другие коды, или другие форматы файла, или
+  //    более адресное применение подавления (листы, области, колонки и столбцы, отдельные клетки)
+  TZCellValueWarning = (zvwNumbersAsText, zvw2DigitsYear);
+  TZCellValueWarnings = set of TZCellValueWarning;
+
   /// Угол поворота текста в ячейке. Целое со знаком.
   ///    Базовый диапазон -90 .. +90, расширенный -180 .. +180 (градусов)
   ///    Значения из расширенного диапазона НЕ МОГУТ работать в Microsoft Excel!
@@ -165,7 +190,7 @@ type
   ///    Nominative range is -90 .. +90, extended is -180 .. +180 (in degrees)
   ///       Extended range values can not be loaded by Microsoft Excel!
   /// XML SS specifications matches the nominative range.
-  /// OpenDocument 1.2 specification, atchign mathematics and SVG, permits FP
+  /// OpenDocument 1.2 specification, matching mathematics and SVG, permits FP
   ///    numbers in different unit (deg, grad, rad) with degrees by default;
   ///    practical implementations use non-negative integer numbers in 0..359 range.
   /// OfficeXML specification is the most perplexed
@@ -550,6 +575,7 @@ type
     FHorPixelSize: real;
     FVertPixelSize: real;
     FDefaultSheetOptions: TZSheetOptions;
+    FSupressedCellWarnings: TZCellValueWarnings;
     procedure SetHorPixelSize(Value: real);
     procedure SetVertPixelSize(Value: real);
     function  GetDefaultSheetOptions(): TZSheetOptions;
@@ -567,6 +593,7 @@ type
     //function SaveToFile(const FileName: ansistring; CodePage: byte = 0): integer; overload; virtual;
     //function SaveToStream(Stream: TStream; CodePage: byte = 0): integer; overload; virtual;
     property Sheets: TZSheets read FSheets write FSheets;
+    property SupressedCellWarnings: TZCellValueWarnings read FSupressedCellWarnings write FSupressedCellWarnings;// default [];
   published
     property Styles: TZStyles read FStyles write FStyles;
     property DefaultSheetOptions: TZSheetOptions read GetDefaultSheetOptions write SetDefaultSheetOptions;

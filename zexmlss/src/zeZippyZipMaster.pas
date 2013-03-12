@@ -42,9 +42,12 @@ begin
   inherited;
 
   FZM := TZipMaster.Create(nil);
-  FZM.ZipFileName := Self.ZipFileName;
   FZM.AddOptions := [AddDirNames{, AddSafe}];
   FZM.WriteOptions := [zwoForceDest];
+  FZM.ZipFileName := Self.ZipFileName;
+
+  if 0 <> FZM.ErrCode
+     then raise EZxZipGen.Create(FZM.ErrMessage);
 end;
 
 procedure TZxZipMastered.DoAbortAndDelete;
@@ -60,6 +63,10 @@ begin
 //  FZM.AddStreamToStream(Data as TMemoryStream);
   FZM.ZipStream.LoadFromStream(Data);
   FZM.AddStreamToFile(RelName,0,0);
+
+  if 0 <> FZM.ErrCode
+     then raise EZxZipGen.Create(FZM.ErrMessage);
+
   Result := True;
 end;
 
