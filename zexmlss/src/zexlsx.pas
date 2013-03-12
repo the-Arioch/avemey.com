@@ -60,7 +60,7 @@ uses
   ,LCLType,
   LResources
   {$ENDIF}
-  {$IFDEF FPC},zipper{$ENDIF};
+  {$IFDEF FPC},zipper{$ELSE}{$I xlsxzipuses.inc}{$ENDIF};
 
 type
   TZXLSXFileItem = record
@@ -99,9 +99,9 @@ function SaveXmlssToXLSX(var XMLSS: TZEXMLSS; FileName: string; const SheetsNumb
                          const SheetsNames: array of string; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring = ''): integer;
 {$ENDIF}
 
-//{$IFNDEF FPC}
-//{$I xlsxzipfunc.inc}
-//{$ENDIF}
+{$IFNDEF FPC}
+{$I xlsxzipfunc.inc}
+{$ENDIF}
 
 function ExportXmlssToXLSX(var XMLSS: TZEXMLSS; PathName: string; const SheetsNumbers: array of integer;
                          const SheetsNames: array of string; TextConverter: TAnsiToCPConverter; CodePageName: string;
@@ -931,7 +931,7 @@ var
           begin
             if (_num > 0) then
               v := v + {$IFDEF FPC} LineEnding {$ELSE} sLineBreak {$ENDIF};
-            v := v + xml.TextBeforeTag;  
+            v := v + xml.TextBeforeTag;
             inc(_num);
           end else
           if ((xml.TagName = 'f') and (xml.TagType = 6)) then
@@ -1028,7 +1028,7 @@ var
       if (not TryStrToInt(s2, y)) then
         result := false
       else
-        dec(y);  
+        dec(y);
       b := result;
     end; //_GetCoords
 
@@ -1142,7 +1142,7 @@ var
 
         inc(num);
       end; //if
-    end; //while    
+    end; //while
   end; //_ReadCols
 
   function _StrToMM(const st: string; var retFloat: real): boolean;
@@ -1301,7 +1301,7 @@ begin
         if (length(s) > 0) then
           if (TryStrToInt(s, _t)) then
             _currSheet.SheetOptions.StartPageNumber := _t;
-            
+
         //s := xml.Attributes.ItemsByName['fitToHeight'];
         //s := xml.Attributes.ItemsByName['fitToWidth'];
         //s := xml.Attributes.ItemsByName['horizontalDpi'];
@@ -1313,7 +1313,7 @@ begin
           if (s = 'portrait') then
             _currSheet.SheetOptions.PortraitOrientation := true;
         end;
-        
+
         //s := xml.Attributes.ItemsByName['pageOrder'];
 
         s := xml.Attributes.ItemsByName['paperSize'];
@@ -1348,7 +1348,7 @@ begin
       if ((xml.TagName = 'hyperlinks') and (xml.TagType = 4)) then
         _ReadHyperLinks();
     end; //while
-    
+
     result := true;
   finally
     if (Assigned(xml)) then
@@ -1591,7 +1591,7 @@ var
         if ((xml.TagName = 'vertAlign') and (xml.TagType = 5)) then
         begin
         end;
-      end; //if  
+      end; //if
       //Тэги настройки шрифта
       //*b - bold
       //*charset
@@ -1952,7 +1952,7 @@ var
             begin
               FillArray[_currFill].bgColorType := 2;
               FillArray[_currFill].bgcolor := _l;
-            end;  
+            end;
           end;
         end;
       end;
@@ -1977,7 +1977,7 @@ var
       if (xml.Eof()) then
         break;
 
-      b := false;  
+      b := false;
 
       if ((xml.TagName = 'xf') and (xml.TagType in [4, 5])) then
       begin
@@ -2531,7 +2531,7 @@ var
         SetLength(_authors, _authorsCount + 1);
         _authors[_authorsCount] := xml.TextBeforeTag;
         inc(_authorsCount);
-      end;  
+      end;
     end; //while
   end; //_ReadAuthors
 
@@ -2553,7 +2553,7 @@ var
         XMLSS.Sheets[_page].ColCount := _c + 1;
       if (_r >= XMLSS.Sheets[_page].RowCount) then
         XMLSS.Sheets[_page].RowCount := _r + 1;
-        
+
       if (TryStrToInt(xml.Attributes.ItemsByName['authorId'], _a)) then
         if (_a >= 0) and (_a < _authorsCount) then
           XMLSS.Sheets[_page].Cell[_c, _r].CommentAuthor := _authors[_a];
@@ -2576,7 +2576,7 @@ var
       end; //while
       XMLSS.Sheets[_page].Cell[_c, _r].Comment := _comment;
       XMLSS.Sheets[_page].Cell[_c, _r].ShowComment := true;
-    end //if  
+    end //if
   end; //_ReadComment();
 
 begin
@@ -2601,14 +2601,14 @@ begin
       else
       if ((xml.TagName = 'comment') and (xml.TagType = 4)) then
         _ReadComment();
-        
+
     end; //while
     result := true;
   finally
     if (Assigned(xml)) then
       FreeAndNil(xml);
     SetLength(_authors, 0);
-    _authors := nil;  
+    _authors := nil;
   end;
 end; //ZEXSLXReadComments
 
@@ -3196,8 +3196,8 @@ end; //ReadXLSX
 //    Stream: TStream                   - поток для записи
 //    TextConverter: TAnsiToCPConverter - конвертер из локальной кодировки в нужную
 //    PageCount: integer                - кол-во страниц
-//    ---CommentCount: integer             - кол-во страниц с комментариями
-//    ---const PagesComments: TIntegerDynArray- номера страниц с комментариями (нумеряция с нуля)
+//    CommentCount: integer             - кол-во страниц с комментариями
+//  const PagesComments: TIntegerDynArray- номера страниц с комментариями (нумеряция с нуля)
 //    CodePageName: string              - название кодовой страници
 //    BOM: ansistring                   - BOM
 //RETURN
@@ -3224,6 +3224,14 @@ function ZEXLSXCreateContentTypes(var XMLSS: TZEXMLSS; Stream: TStream; PageCoun
 var
   _xml: TZsspXMLWriterH;    //писатель
  // s: string;
+  
+(*  Возможно проще записать умолчания - и готово.
+    По крайней мере с комментариями - на каждый лист нужны файлы №6 и №7
+  <Default Extension="bin" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings" /> 
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml" /> 
+  <Default Extension="xml" ContentType="application/xml" /> 
+  <Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing" />   
+*)  
 
   procedure _WriteOverride(const PartName: string; ct: integer); var s: string;
   begin
@@ -3266,10 +3274,10 @@ var
 //    _WriteOverride('/xl/_rels/workbook.xml.rels', 3);
     for i := 0 to PageCount - 1 do begin
       _WriteOverride('/xl/worksheets/sheet' + IntToStr(i + 1) + '.xml', 0);
-//      if High(PagesRels) >= i then if PagesRels[i] then
+//      if High(PagesRels) >= i then if PagesRels[i] then    // IntToStr(PagesComments[i] + 1)
 //          _WriteOverride('/xl/worksheets/_rels/sheet' + IntToStr(i + 1) + '.xml.rels', 3);
-      if High(PagesComments) >= i then if PagesComments[i] then
-          _WriteOverride('/xl/comments' + IntToStr(i + 1) + '.xml', 6); // Excel is pervert
+      if High(PagesComments) >= i then if PagesComments[i] then    // IntToStr(PagesComments[i] + 1)
+          _WriteOverride('/xl/worksheets/comments' + IntToStr(i + 1) + '.xml', 6); // Excel is pervert
     end;
     _WriteOverride('/xl/workbook.xml', 2);
     _WriteOverride('/xl/styles.xml', 1);
@@ -3282,28 +3290,31 @@ var
    <Default Extension="xml" ContentType="application/xml"/>
    ????  *)
 begin
-  result := 0;
-  _xml := nil;
-  try
-    _xml := TZsspXMLWriterH.Create();
-    _xml.TabLength := 1;
-    _xml.TextConverter := TextConverter;
-    _xml.TabSymbol := ' ';
-    if (not _xml.BeginSaveToStream(Stream)) then
-    begin
-      result := 2;
-      exit;
-    end;
+  Result := 2;
+  _xml := {nil;} ZEXLSXNewXmlWithHeader( Stream, CodePageName, BOM, TextConverter);
+  if _xml = nil then Exit;
 
-    ZEWriteHeaderCommon(_xml, CodePageName, BOM);
+  Result := 0;
+  try
+//    _xml := TZsspXMLWriterH.Create();
+//    _xml.TabLength := 1;
+//    _xml.TextConverter := TextConverter;
+//    _xml.TabSymbol := ' ';
+//    if (not _xml.BeginSaveToStream(Stream)) then
+//    begin
+//      result := 2;
+//      exit;
+//    end;
+//
+//    ZEWriteHeaderCommon(_xml, CodePageName, BOM);
+
     _xml.Attributes.Clear();
     _xml.Attributes.Add('xmlns', 'http://schemas.openxmlformats.org/package/2006/content-types');
     _xml.WriteTagNode('Types', true, true, true);
     _WriteTypes();
     _xml.WriteEndTagNode(); //Types
   finally
-    if (Assigned(_xml)) then
-      FreeAndNil(_xml);
+    _xml.Free;
   end;
 end; //ZEXLSXCreateContentTypes
 
@@ -3387,17 +3398,19 @@ var _xml: TZsspXMLWriterH; i: integer;
     x: TZXLSXCommentItem;
 begin
   s.Position := 0;
-  _xml := TZsspXMLWriterH.Create();
-  try
-    _xml.TabLength := 1;
-    _xml.TextConverter := TextConverter;
-    _xml.TabSymbol := ' ';
-    if (not _xml.BeginSaveToStream(S)) then
-    begin
-      exit;  // Abort; ? Raise ... ?
-    end;
+  _xml := ZEXLSXNewXmlWithHeader( S, CharSet, BOM, TextConverter);
+  if _xml = nil then exit; // Abort; ? Raise ... ?
 
-    ZEWriteHeaderCommon(_xml, CharSet, BOM);
+  try
+//    _xml.TabLength := 1;
+//    _xml.TextConverter := TextConverter;
+//    _xml.TabSymbol := ' ';
+//    if (not _xml.BeginSaveToStream(S)) then
+//    begin
+//      exit;  // Abort; ? Raise ... ?
+//    end;
+//
+//    ZEWriteHeaderCommon(_xml, CharSet, BOM);
 
     _xml.Attributes.Clear();
 //  x:comments xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main
@@ -3425,7 +3438,7 @@ begin
             _xml.WriteTagNode('x:r', True, False, False);
             //          <x:t xml:space="preserve">
                _xml.Attributes.Add('xml:space', 'preserve');
-               _xml.WriteTag('x:t', x.Author +': ' + x.Text); // include Author - yes or now ?
+               _xml.WriteTag('x:t', x.Author +': ' + x.Text); // include Author - yes or no ?
                _xml.Attributes.Clear;
             _xml.WriteEndTagNode();
           _xml.WriteEndTagNode();
@@ -3478,6 +3491,46 @@ var
   procedure WriteXLSXSheetHeader();
   var
     s: string;
+    b: boolean;
+    _SOptions: TZSheetOptions;
+
+    procedure _AddSplitValue(const SplitMode: TZSplitMode; const SplitValue: integer; const AttrName: string);
+    var
+      s: string;
+      b: boolean;
+
+    begin
+      s := '0';
+      b := true;
+      case SplitMode of
+        ZSplitFrozen:
+          begin
+            s := IntToStr(SplitValue);
+            if (SplitValue = 0) then
+              b := false;
+          end;
+        ZSplitSplit: s := IntToStr(round(PixelToPoint(SplitValue) * 20));
+        ZSplitNone: b := false;
+      end;
+      if (b) then
+        _xml.Attributes.Add(AttrName, s);
+    end; //_AddSplitValue
+
+    procedure _AddTopLeftCell(const VMode: TZSplitMode; const VValue: integer; const HMode: TZSplitMode; const HValue: integer);
+    var
+      _isProblem: boolean;
+
+    begin
+      _isProblem := (VMode = ZSplitSplit) or (HMode = ZSplitSplit);
+      _isProblem := _isProblem or (VValue > 1000) or (HValue > 100);
+
+      if (not _isProblem) then
+      begin
+        s := ZEGetA1byCol(VValue) + IntToSTr(HValue + 1);
+        _xml.Attributes.Add('topLeftCell', s);
+      end;
+    end; //_AddTopLeftCell
+
   begin
     _xml.Attributes.Clear();
     _xml.Attributes.Add('filterMode', 'false');
@@ -3527,7 +3580,7 @@ var
     _AddSelection('A1', 'bottomLeft');
     _AddSelection('F16', 'topLeft');
     }
-    
+
     s := ZEGetA1byCol(XMLSS.Sheets[SheetNum].SheetOptions.ActiveCol) + IntToSTr(XMLSS.Sheets[SheetNum].SheetOptions.ActiveRow + 1);
     _xml.Attributes.Clear();
     _xml.Attributes.Add('activeCell', s);
@@ -3580,7 +3633,7 @@ var
     b: boolean;
     s, u: string;
     _r: TRect;
-    
+
   begin
     _xml.Attributes.Clear();
     if RelationURLs <> nil then RelationURLs.Clear;
@@ -3608,7 +3661,7 @@ var
                _comments := TZXLSXCommentsStore.Create;
                _comments.BOM := BOM;
                _comments.CharSet := CodePageName;
-               _comments.TextConverter :=TextConverter;
+               _comments.TextConverter := TextConverter;
              end;
           end;
           if _comments <> nil then
@@ -3618,7 +3671,7 @@ var
         if _sheet.Cell[j, i].HRef > '' then begin
            if RelationURLs <> nil then
               RelationURLs.Add(Format('rId_URL_%s%d=%s',
-                [ ZEGetA1byCol(j), i + 1, _sheet.Cell[j, i].HRef ]));
+                [ ZEGetA1byCol(j), i + 1, _sheet.Cell[j, i].HRef ] ));
         end; // HRef
 
         b := (length(_sheet.Cell[j, i].Data) > 0) or
@@ -3634,10 +3687,10 @@ var
           ZENumber: s := 'n';
           ZEDateTime: s := 'str'; //??
           ZEBoolean: s := 'b';
-          ZEansistring: s := 'str';
+          ZEString: s := 'str';
           ZEError: s := 'e';
         end;
-        
+
         _xml.Attributes.Add('t', s, false);
         if (b) then
         begin
@@ -3923,7 +3976,7 @@ begin
   end;
 end; //ZEXLSXCreateWorkBook
 
-//Создаёт styles.xml 
+//Создаёт styles.xml
 //INPUT
 //  var XMLSS: TZEXMLSS                 - хранилище
 //    Stream: TStream                   - поток для записи
@@ -3938,7 +3991,7 @@ var
   _FontIndex: TIntegerDynArray;  //соответствия шрифтов
   _FillIndex: TIntegerDynArray;  //заливки
   _BorderIndex: TIntegerDynArray;//границы
-  _StylesCount: integer;        
+  _StylesCount: integer;
 
   //Являются ли шрифты одинаковыми
   function _isFontsEqual(const fnt1, fnt2: TFont): boolean;
@@ -3969,14 +4022,16 @@ var
   //INPUT
   //  var arr: TIntegerDynArray  - массив
   //      cnt: integer          - номер последнего элемента в массиве (начинает с 0)
-  procedure _UpdateArrayIndex(var arr: TIntegerDynArray; cnt: integer); deprecated 'remove CNT parameter!';
+  //                              (предполагается, что возникнет ситуация, когда нужно будет использовать только часть массива)
+  procedure _UpdateArrayIndex(var arr: TIntegerDynArray; cnt: integer); // deprecated {$IFDEF USE_DEPRECATED_STRING}'remove CNT parameter!'{$ENDIF};
   var
     res: TIntegerDynArray;
     i, j: integer;
     num: integer;
+
   begin
-    Assert( Length(arr) - cnt = 2, 'Wow! We really may need this parameter!');
-    cnt := Length(arr) - 2;   // get ready to strip it
+    //Assert( Length(arr) - cnt = 2, 'Wow! We really may need this parameter!');
+    //cnt := Length(arr) - 2;   // get ready to strip it
     SetLength(res, Length(arr));
 
     num := 0;
@@ -4162,7 +4217,7 @@ var
         ZPDiagCross:          s := 'darkGrid';
         ZPThickDiagCross:     s := 'darkTrellis';
         ZPThinHorzStripe:     s := 'lightHorizontal';
-        ZPThinVertStripe:     s := 'lightVertical'; 
+        ZPThinVertStripe:     s := 'lightVertical';
         ZPThinReverseDiagStripe:  s := 'lightDown';
         ZPThinDiagStripe:         s := 'lightUp';
         ZPThinHorzCross:          s := 'lightGrid';
@@ -4470,7 +4525,7 @@ var
   //<cellStyles> ... </cellStyles>
   procedure WriteCellStyles();
   begin
-  end; //WriteCellStyles 
+  end; //WriteCellStyles
 
 begin
   result := 0;
@@ -4500,7 +4555,11 @@ begin
 //    WriteCellStyleXfs('cellXfs', true);
 
     // experiment: do not need styles, ergo do not need fake xfId
-    WriteCellStyleXfs('cellXfs', false);
+    //Result: experiment failed!
+    //Libre/Open Office needs cellStyleXfs for reading background colors!
+    // (Libre/Open Office have highest priority)
+    //WriteCellStyleXfs('cellXfs', false);
+    // experiment end
 
     WriteCellStyles(); //??
 
@@ -4587,7 +4646,6 @@ end;
 //    BOM: ansistring                   - BOM
 //RETURN
 //      integer
-
 function ZEXLSXCreateRelsMain(Stream: TStream; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
 var
   _xml: TZsspXMLWriterH;
@@ -4626,7 +4684,7 @@ begin
   end;
 end; //ZEXLSXCreateRelsMain
 
-//Создаёт xl/_rels/workbook.xml.rels   
+//Создаёт xl/_rels/workbook.xml.rels
 //INPUT
 //    PageCount: integer                - кол-во страниц
 //    Stream: TStream                   - поток для записи
@@ -4722,7 +4780,7 @@ begin
   end;
 end; //ZEXLSXCreateSharedStrings
 
-//Создаёт app.xml 
+//Создаёт app.xml
 //INPUT
 //    Stream: TStream                   - поток для записи
 //    TextConverter: TAnsiToCPConverter - конвертер из локальной кодировки в нужную
@@ -4733,7 +4791,7 @@ end; //ZEXLSXCreateSharedStrings
 function ZEXLSXCreateDocPropsApp(Stream: TStream; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
 var
   _xml: TZsspXMLWriterH;
-  s: string;
+//  s: string;
 
 begin
   result := 0;
@@ -4764,7 +4822,7 @@ begin
 //    s := 'DELPHI_or_CBUILDER';
 //    {$ENDIF}
 //    _xml.WriteTag('Application', 'ZEXMLSSlib/0.0.5$' + s, true, false, true);
-    _xml.WriteTag('Application', ZELibraryName, true, false, true);
+    _xml.WriteTag('Application', ZELibraryName(), true, false, true);
 
     _xml.WriteEndTagNode(); //Properties
 
@@ -4774,7 +4832,7 @@ begin
   end;
 end; //ZEXLSXCreateDocPropsApp
 
-//Создаёт app.xml 
+//Создаёт app.xml
 //INPUT
 //  var XMLSS: TZEXMLSS                 - хранилище
 //    Stream: TStream                   - поток для записи
@@ -4957,13 +5015,15 @@ begin
         begin
 //          _commentArray[i] := 1;
           CommentFlags[i] := true;
-          //создать файл с комментариями
+          // создать файл с комментариями
+          // Excel only would show them if SVG figure is added
+          //    to render them in. There is no default tooltip bubble in XLSX
           s := 'comments' + IntToStr(i + 1) + '.xml';
-          Stream := azg.NewStream({path_sheets} path_xl + s);  // Excel is pervert
+          Stream := azg.NewStream(path_sheets + s);
           Stream.CopyFrom(data_comments, 0);
           azg.SealStream(Stream); Stream := nil;
 
-          ZEAddRelsRelation(_sheet_ref, 'rId_cmt', 7, '../' + s); // Excel is pervert
+          ZEAddRelsRelation(_sheet_ref, 'rId_cmt', 7, s);
         end;
 
         if ref_URLs.Count > 0 then
@@ -5083,7 +5143,7 @@ begin
     ZEXLSXCreateRelsMain(Stream, TextConverter, CodePageName, BOM);
     FreeAndNil(Stream);
 
-    // xl/_rels/workbook.xml.rels 
+    // xl/_rels/workbook.xml.rels
     path_relsw := path_xl + '_rels' + PathDelim;
     if (not DirectoryExists(path_relsw)) then
       ForceDirectories(path_relsw);
@@ -5111,7 +5171,7 @@ begin
       begin
         _commentArray[i] := 1;
         //создать файл с комментариями
-      end;  
+      end;
     end; //for i
 
     //workbook.xml - список листов
@@ -5310,9 +5370,8 @@ begin
 end;
 {$ENDIF}
 
-//{$IFNDEF FPC}
-//{$I xlsxzipfuncimpl.inc}
-//{$ENDIF}
+{$IFNDEF FPC}
+{$I xlsxzipfuncimpl.inc}
+{$ENDIF}
 
 end.
-

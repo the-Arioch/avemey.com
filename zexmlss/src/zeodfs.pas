@@ -4,7 +4,7 @@
 // e-mail:  avemey@tut.by
 // URL:     http://avemey.com
 // License: zlib
-// Last update: 2013.01.30
+// Last update: 2013.02.23
 //----------------------------------------------------------------
 // Modified by the_Arioch@nm.ru - added uniform save API
 //     to create ODS in Delphi/Windows
@@ -59,7 +59,7 @@ function SaveXmlssToODFS(var XMLSS: TZEXMLSS; FileName: string; const SheetsNumb
 {$ENDIF}
 
 function ExportXmlssToODFS(var XMLSS: TZEXMLSS; FileName: string; const SheetsNumbers: array of integer;
-                           const SheetsNames: array of string; TextConverter: TAnsiToCPConverter; CodePageName: AnsiString;
+                           const SheetsNames: array of string; TextConverter: TAnsiToCPConverter; CodePageName: String;
                            BOM: ansistring = '';
                            AllowUnzippedFolder: boolean = false; ZipGenerator: CZxZipGens = nil): integer; overload;
 
@@ -90,6 +90,9 @@ function ODFCreateMeta(var XMLSS: TZEXMLSS; Stream: TStream; TextConverter: TAns
 {для чтения}
 //Чтение содержимого документа ODS (content.xml)
 function ReadODFContent(var XMLSS: TZEXMLSS; stream: TStream): boolean;
+
+//Чтение настроек документа ODS (settings.xml)
+function ReadODFSettings(var XMLSS: TZEXMLSS; stream: TStream): boolean;
 
 implementation
 uses StrUtils;
@@ -137,6 +140,7 @@ type
   private
     FXMLSS: TZEXMLSS;
     FRetCode: integer;
+    FFileType: integer;
   protected
   public
     constructor Create(); virtual;
@@ -144,6 +148,7 @@ type
     procedure DoDoneOutZipStream(Sender: TObject; var AStream: TStream; AItem: TFullZipFileEntry);
     property XMLSS: TZEXMLSS read FXMLSS write FXMLSS;
     property RetCode: integer read FRetCode;
+    property FileType: integer read FFileType write FFileType;
   end;
 
 constructor TODFZipHelper.Create();
@@ -155,19 +160,29 @@ end;
 
 procedure TODFZipHelper.DoCreateOutZipStream(Sender: TObject; var AStream: TStream; AItem: TFullZipFileEntry);
 begin
-  AStream := TMemorystream.Create;
+  AStream := TMemoryStream.Create();
 end;
 
 procedure TODFZipHelper.DoDoneOutZipStream(Sender: TObject; var AStream: TStream; AItem: TFullZipFileEntry);
 begin
   if (Assigned(AStream)) then
-  begin
+  try
     AStream.Position := 0;
-    if (not ReadODFContent(FXMLSS, AStream)) then
-      FRetCode := FRetCode or 2;
+
+    if (FileType = 0) then
+    begin
+      if (not ReadODFContent(FXMLSS, AStream)) then
+        FRetCode := FRetCode or 2;
+    end else
+    if (FileType = 1) then
+    begin
+      if (not ReadODFSettings(FXMLSS, AStream)) then
+        FRetCode := FRetCode or 2;
+    end;
+  finally
     FreeAndNil(AStream)
   end;
-end;
+end; //DoDoneOutZipStream
 
 {$ENDIF}
 
@@ -206,9 +221,9 @@ begin
     result := ZEBoolean
   else
   if (s = 'STRING') then
-    result := ZEansistring
+    result := ZEString
   else
-    result := ZEansistring;
+    result := ZEString;
 end; //ODFTypeToZCellType
 
 
@@ -296,25 +311,82 @@ begin
 end; //GenODStylesAttr
 
 //<office:font-face-decls> ... </office:font-face-decls>
-procedure ZEWriteFontFaceDecls(_xml: TZsspXMLWriterH);
+procedure ZEWriteFontFaceDecls(XMLSS: TZEXMLSS; _xml: TZsspXMLWriterH);
+var
+  kol, maxkol: integer;
+  _fn: array of string;
+
+  procedure _addFonts();
+  var
+    i, j: integer;
+    s: string;
+    b: boolean;
+    _name: string;
+
+  begin
+    for i := -1 to XMLSS.Styles.Count - 1 do
+    begin
+      _name := XMLSS.Styles[i].Font.Name;
+      s := UpperCase(_name);
+      b := true;
+      for j := 0 to kol - 1 do
+        if (_fn[j] = s) then
+        begin
+          b := false;
+          break;
+        end;
+      if (b) then
+      begin
+        _xml.Attributes.ItemsByNum[0] := _name;
+        if (pos(' ', _name) = 0) then
+          _xml.Attributes.ItemsByNum[1] := _name
+        else
+          _xml.Attributes.ItemsByNum[1] := '''' + _name + '''';
+
+        _xml.WriteEmptyTag(ZETag_StyleFontFace, true, true);
+        inc(kol);
+        if (kol + 1 >= maxkol) then
+        begin
+          inc(maxkol, 10);
+          SetLength(_fn, maxkol);
+        end;
+        _fn[kol - 1] := s;
+      end; //if
+    end; //for
+  end; //_addFonts
+
 begin
-  _xml.WriteTagNode('office:font-face-decls', true, true, true);
-  _xml.Attributes.Add(ZETag_Attr_StyleName, 'Arial', true);
-  _xml.Attributes.Add('svg:font-family', 'Arial', true);
-  _xml.Attributes.Add('style:font-family-generic', 'swiss', true);
-  _xml.Attributes.Add('style:font-pitch', 'variable', true);
-  _xml.WriteEmptyTag(ZETag_StyleFontFace, true, false);
+  maxkol := 10;
+  SetLength(_fn, maxkol);
+  kol := 3;
+  _fn[0] := 'ARIAL';
+  _fn[1] := 'MANGAL';
+  _fn[2] := 'TAHOMA';
+  try
+    _xml.WriteTagNode('office:font-face-decls', true, true, true);
+    _xml.Attributes.Add(ZETag_Attr_StyleName, 'Arial', true);
+    _xml.Attributes.Add('svg:font-family', 'Arial', true);
+    _xml.Attributes.Add('style:font-family-generic', 'swiss', true);
+    _xml.Attributes.Add('style:font-pitch', 'variable', true);
+    _xml.WriteEmptyTag(ZETag_StyleFontFace, true, false);
 
-  _xml.Attributes.ItemsByNum[0] := 'Mangal';
-  _xml.Attributes.ItemsByNum[1] := 'Mangal';
-  _xml.Attributes.ItemsByNum[2] := 'system';
-  _xml.WriteEmptyTag(ZETag_StyleFontFace, true, false);
+    _xml.Attributes.ItemsByNum[0] := 'Mangal';
+    _xml.Attributes.ItemsByNum[1] := 'Mangal';
+    _xml.Attributes.ItemsByNum[2] := 'system';
+    _xml.WriteEmptyTag(ZETag_StyleFontFace, true, false);
 
-  _xml.Attributes.ItemsByNum[0] := 'Tahoma';
-  _xml.Attributes.ItemsByNum[1] := 'Tahoma';
-  _xml.WriteEmptyTag(ZETag_StyleFontFace, true, false);
-  _xml.Attributes.Clear();
-  _xml.WriteEndTagNode(); //office:font-face-decls
+    _xml.Attributes.ItemsByNum[0] := 'Tahoma';
+    _xml.Attributes.ItemsByNum[1] := 'Tahoma';
+    _xml.WriteEmptyTag(ZETag_StyleFontFace, true, false);
+
+    _addFonts();
+
+    _xml.Attributes.Clear();
+    _xml.WriteEndTagNode(); //office:font-face-decls
+  finally
+    SetLength(_fn, 0);
+    _fn := nil;
+  end;
 end; //WriteFontFaceDecls
 
 //Переводит стиль границы в строку для ODF
@@ -500,6 +572,10 @@ begin
       _xml.Attributes.Add('fo:border', s);
     end;
   end;
+
+  //TODO: по умолчанию no-wrap?
+  if (ProcessedStyle.Alignment.WrapText) then
+    _xml.Attributes.Add('fo:wrap-option', 'wrap');
 
   for j := n to 5 do
   begin
@@ -754,7 +830,7 @@ begin
     GenODStylesAttr(_xml.Attributes);
     _xml.WriteTagNode('office:document-styles', true, true, true);
     _xml.Attributes.Clear();
-    ZEWriteFontFaceDecls(_xml);
+    ZEWriteFontFaceDecls(XMLSS, _xml);
 
     //office:styles
     _xml.Attributes.Clear();
@@ -762,7 +838,7 @@ begin
 
     //Стиль по-умолчанию
     _xml.Attributes.Clear();
-    _xml.Attributes.Add('style:name', 'Default');
+    _xml.Attributes.Add(ZETag_Attr_StyleName, 'Default');
     _xml.Attributes.Add('style:family', 'table-cell', false);
     _xml.WriteTagNode('style:style', true, true, true);
     ODFWriteTableStyle(XMLSS, _xml, -1, true);
@@ -781,7 +857,7 @@ end; //ODFCreateStyles
 //INPUT
 //  var XMLSS: TZEXMLSS                 - хранилище
 //    Stream: TStream                   - поток для записи
-//  const _pages: TIntegerDynArray       - массив страниц
+//  const _pages: TIntegerDynArray      - массив страниц
 //  const _names: TStringDynArray       - массив имён страниц
 //    PageCount: integer                - кол-во страниц
 //    TextConverter: TAnsiToCPConverter - конвертер из локальной кодировки в нужную
@@ -792,7 +868,65 @@ end; //ODFCreateStyles
 function ODFCreateSettings(var XMLSS: TZEXMLSS; Stream: TStream; const _pages: TIntegerDynArray;
                           const _names: TStringDynArray; PageCount: integer; TextConverter: TAnsiToCPConverter; CodePageName: String; BOM: ansistring): integer;
 var
-  _xml: TZsspXMLWriterH; 
+  _xml: TZsspXMLWriterH;
+  i: integer;
+
+  //<config:config-item config:name="ConfigName" config:type="ConfigType">ConfigValue</config:config-item>
+  procedure _AddConfigItem(const ConfigName, ConfigType, ConfigValue: string);
+  begin
+    _xml.Attributes.Clear();
+    _xml.Attributes.Add('config:name', ConfigName);
+    _xml.Attributes.Add('config:type', ConfigType);
+    _xml.WriteTag('config:config-item', ConfigValue, true, false, true);
+  end; //_AddConfigItem
+
+  procedure _WriteSplitValue(const SPlitMode: TZSplitMode; const SplitValue: integer; const SplitModeName, SplitValueName: string; NeedAdd: boolean = false);
+  var
+    s: string;
+
+  begin
+    if ({(SplitMode <> ZSplitNone) and} (SplitValue <> 0) or (NeedAdd)) then
+    begin
+      s := '0';
+      case (SPlitMode) of
+        ZSplitFrozen: s := '2';
+        ZSplitSplit: s := '1';
+      end;
+      _AddConfigItem(SplitModeName, 'short', s);
+      _AddConfigItem(SplitValueName, 'int', IntToStr(SplitValue));
+    end;
+  end; //_WriteSplitValue
+
+  procedure _WritePageSettings(const num: integer);
+  var
+    _PageNum: integer;
+    _SheetOptions: TZSheetOptions;
+    b: boolean;
+
+  begin
+    _PageNum := _pages[num];
+    _xml.Attributes.Clear();
+    _xml.Attributes.Add('config:name', _names[num]);
+    _xml.WriteTagNode('config:config-item-map-entry', true, true, true);
+    _SheetOptions := XMLSS.Sheets[_PageNum].SheetOptions;
+
+    _AddConfigItem('CursorPositionX', 'int', IntToStr(_SheetOptions.ActiveCol));
+    _AddConfigItem('CursorPositionY', 'int', IntToStr(_SheetOptions.ActiveRow));
+
+    b := (_SheetOptions.SplitHorizontalMode = ZSplitSplit) or
+         (_SheetOptions.SplitHorizontalMode = ZSplitSplit);
+    //это не ошибка (_SheetOptions.SplitHorizontalMode = VerticalSplitMode)
+    _WriteSplitValue(_SheetOptions.SplitHorizontalMode, _SheetOptions.SplitHorizontalValue, 'VerticalSplitMode', 'VerticalSplitPosition', b);
+    _WriteSplitValue(_SheetOptions.SplitVerticalMode, _SheetOptions.SplitVerticalValue, 'HorizontalSplitMode', 'HorizontalSplitPosition', b);
+
+    _AddConfigItem('ActiveSplitRange', 'short', '2');
+    _AddConfigItem('PositionLeft', 'int', '0');
+    _AddConfigItem('PositionRight', 'int', '1');
+    _AddConfigItem('PositionTop', 'int', '0');
+    _AddConfigItem('PositionBottom', 'int', '1');
+
+    _xml.WriteEndTagNode(); //config:config-item-map-entry
+  end; //_WritePageSettings
 
 begin
   result := 0;
@@ -816,12 +950,34 @@ begin
     _xml.Attributes.Add('office:version', '1.2', false);
     _xml.WriteTagNode('office:document-settings', true, true, true);
     _xml.Attributes.Clear();
-//    _xml.WriteTagNode('office:settings', true, true, true);
-//    _xml.WriteTagNode('config:config-item-set', true, true, true);
-//    //
-//    //
-//    _xml.WriteEndTagNode(); //config:config-item-set
-//    _xml.WriteEndTagNode(); //office:settings
+    _xml.WriteTagNode('office:settings', true, true, true);
+
+    _xml.Attributes.Add('config:name', 'ooo:view-settings');
+    _xml.WriteTagNode('config:config-item-set', true, true, false);
+
+    _AddConfigItem('VisibleAreaTop', 'int', '0');
+    _AddConfigItem('VisibleAreaLeft', 'int', '0');
+    _AddConfigItem('VisibleAreaWidth', 'int', '6773');
+    _AddConfigItem('VisibleAreaHeight', 'int', '1813');
+
+    _xml.Attributes.Clear();
+    _xml.Attributes.Add('config:name', 'Views');
+    _xml.WriteTagNode('config:config-item-map-indexed', true, true, false);
+
+    _xml.Attributes.Clear();
+    _xml.WriteTagNode('config:config-item-map-entry', true, true, false);
+
+    _xml.Attributes.Add('config:name', 'Tables');
+    _xml.WriteTagNode('config:config-item-map-named', true, true, false);
+
+    for i := 0 to PageCount - 1 do
+      _WritePageSettings(i);
+
+    _xml.WriteEndTagNode(); //config:config-item-map-named
+    _xml.WriteEndTagNode(); //config:config-item-map-entry
+    _xml.WriteEndTagNode(); //config:config-item-map-indexed
+    _xml.WriteEndTagNode(); //config:config-item-set
+    _xml.WriteEndTagNode(); //office:settings
     _xml.WriteEndTagNode(); //office:document-settings
   finally
     if (Assigned(_xml)) then
@@ -868,7 +1024,7 @@ var
       if (ColumnStyle[now_i][now_j] > -1) then
         exit;
       _xml.Attributes.Clear();
-      _xml.Attributes.Add('style:name', 'co' + IntToStr(now_StyleNumber));
+      _xml.Attributes.Add(ZETag_Attr_StyleName, 'co' + IntToStr(now_StyleNumber));
       _xml.Attributes.Add('style:family', 'table-column', false);
       _xml.WriteTagNode('style:style', true, true, false);
 
@@ -918,7 +1074,7 @@ var
       if (RowStyle[now_i][now_j] > -1) then
         exit;
       _xml.Attributes.Clear();
-      _xml.Attributes.Add('style:name', 'ro' + IntToStr(now_StyleNumber));
+      _xml.Attributes.Add(ZETag_Attr_StyleName, 'ro' + IntToStr(now_StyleNumber));
       _xml.Attributes.Add('style:family', 'table-row', false);
       _xml.WriteTagNode('style:style', true, true, false);
 
@@ -974,7 +1130,7 @@ var
     _xml.WriteTagNode('office:document-content', true, true, false);
     _xml.Attributes.Clear();
     _xml.WriteEmptyTag('office:scripts', true, false);  //потом на досуге можно подумать
-    ZEWriteFontFaceDecls(_xml);
+    ZEWriteFontFaceDecls(XMLSS, _xml);
 
     ///********   Automatic Styles   ********///
     _xml.WriteTagNode('office:automatic-styles', true, true, false);
@@ -1023,7 +1179,7 @@ var
     for i := 0 to XMLSS.Styles.Count - 1 do
     begin
       _xml.Attributes.Clear();
-      _xml.Attributes.Add('style:name', 'ce' + IntToStr(i));
+      _xml.Attributes.Add(ZETag_Attr_StyleName, 'ce' + IntToStr(i));
       _xml.Attributes.Add('style:family', 'table-cell', false);
         //??style:parent-style-name = Default
       _xml.WriteTagNode('style:style', true, true, false);
@@ -1672,7 +1828,7 @@ end; //SaveXmlssToODFS
 {$ENDIF}
 
 function ExportXmlssToODFS(var XMLSS: TZEXMLSS; FileName: string; const SheetsNumbers: array of integer;
-                           const SheetsNames: array of string; TextConverter: TAnsiToCPConverter; CodePageName: AnsiString;
+                           const SheetsNames: array of string; TextConverter: TAnsiToCPConverter; CodePageName: String;
                            BOM: ansistring = '';
                            AllowUnzippedFolder: boolean = false; ZipGenerator: CZxZipGens = nil): integer; overload;
 var
@@ -1997,6 +2153,12 @@ var
           s := xml.Attributes.ItemsByName['style:diagonal-tl-br'];
           if (length(s) > 0) then
             ZEStrToODFBorderStyle(s, _style.Border[5]);
+
+          //Перенос по словам (wrap no-wrap)
+          s := xml.Attributes.ItemsByName['fo:wrap-option'];
+          if (length(s) > 0) then
+            if (UpperCase(s) = 'WRAP') then
+              _style.Alignment.WrapText := true;
         end else //if
 
         if ((xml.TagName = 'style:paragraph-properties') and (xml.TagType in [4, 5])) then
@@ -2081,7 +2243,7 @@ var
         if (IfTag('style:style', 4)) then
         begin
           _stylefamily := xml.Attributes.ItemsByName['style:family'];
-          _stylename := xml.Attributes.ItemsByName['style:name'];
+          _stylename := xml.Attributes.ItemsByName[ZETag_Attr_StyleName];
 
           if (_stylefamily = 'table-column') then //столбец
           begin
@@ -2154,7 +2316,7 @@ var
             begin
               MaxTableStyleCount := TableStyleCount + 20;
               SetLength(ODFTableStyles, MaxTableStyleCount);
-            end;  
+            end;
             ODFTableStyles[TableStyleCount].name := _stylename;
             ODFTableStyles[TableStyleCount].isColor := false;
             while (not ifTag('style:style', 6)) do
@@ -2308,7 +2470,11 @@ var
         //текущее строковое значение
         //*s := xml.Attributes.ItemsByName['office:string-value'];
         //Тип значения в ячейке
-        _CurrCell.CellType := ODFTypeToZCellType(xml.Attributes.ItemsByName['table:value-type']);
+        s := xml.Attributes.ItemsByName['table:value-type'];
+        if length(s) = 0 then
+           s := xml.Attributes.ItemsByName['office:value-type'];
+        _CurrCell.CellType := ODFTypeToZCellType(s);
+
         //защищённость ячейки
         s := xml.Attributes.ItemsByName['table:protected']; //{tut} надо будет добавить ещё один стиль
         //table:number-matrix-rows-spanned ??
@@ -2417,7 +2583,7 @@ var
           end; //while *table-cell
         end; //if
 
-        _CurrCell.Data := _celltext;
+        _CurrCell.Data := ZEReplaceEntity(_celltext);
 
         //Если ячейку нужно повторить
         if (isRepeatCell) then
@@ -2427,7 +2593,8 @@ var
             CheckCol(_CurrentPage, _CurrentCol + _RepeatCellCount + 1);
             for i := 1 to _RepeatCellCount do
               XMLSS.Sheets[_CurrentPage].Cell[_CurrentCol + i, _CurrentRow].Assign(_CurrCell);
-            inc(_CurrentCol, _RepeatCellCount);
+            //-1, т.к. нужно учитывать, что номер ячейки увеличивается на 1 каждый раз
+            inc(_CurrentCol, _RepeatCellCount - 1);
           end;
 
         inc(_CurrentCol);
@@ -2526,6 +2693,7 @@ var
           if (TryStrToInt(s, t)) then
             if (t < 255) then
             begin
+              dec(t); //т.к. один столбец уже есть
               CheckCol(_CurrentPage, _MaxCol + t + 1);
               for i := 1 to t do
                 XMLSS.Sheets[_CurrentPage].Columns[_MaxCol + i].Assign(XMLSS.Sheets[_CurrentPage].Columns[_MaxCol]);
@@ -2593,6 +2761,141 @@ begin
   end;
 end; //ReadODFContent
 
+//Чтение настроек документа ODS (settings.xml)
+//INPUT
+//  var XMLSS: TZEXMLSS - хранилище
+//      stream: TStream - поток для чтения
+//RETURN
+//      boolean - true - всё ок
+function ReadODFSettings(var XMLSS: TZEXMLSS; stream: TStream): boolean;
+var
+  xml: TZsspXMLReaderH;
+
+  function _GetSplitModeByNum(const num: integer): TZSplitMode;
+  begin
+    result := ZSplitNone;
+    case (num) of
+      1: result := ZSplitSplit;
+      2: result := ZSplitFrozen
+    end;
+  end; //_GetSplitModeByNum
+
+  procedure _ReadSettingsPage();
+  var
+    _ConfigName: string;
+    _ConfigType: string;
+    _ConfigValue: string;
+    _Sheet: TZSheet;
+    s: string;
+    i: integer;
+    b: boolean;
+    _intValue: integer;
+
+    procedure _FindParam();
+    begin
+      if (length(_ConfigValue) > 0) then
+      begin
+        if (_ConfigName = 'CursorPositionX') then
+        begin
+          _Sheet.SheetOptions.ActiveCol := _intValue;
+        end else
+        if (_ConfigName = 'CursorPositionY') then
+        begin
+          _Sheet.SheetOptions.ActiveRow := _intValue;
+        end else
+        if (_ConfigName = 'HorizontalSplitMode') then
+        begin
+          _Sheet.SheetOptions.SplitVerticalMode := _GetSplitModeByNum(_intValue);
+        end else
+        if (_ConfigName = 'HorizontalSplitPosition') then
+        begin
+          _Sheet.SheetOptions.SplitVerticalValue := _intValue;
+        end else
+        if (_ConfigName = 'VerticalSplitMode') then
+        begin
+          _Sheet.SheetOptions.SplitHorizontalMode := _GetSplitModeByNum(_intValue);
+        end else
+        if (_ConfigName = 'VerticalSplitPosition') then
+        begin
+          _Sheet.SheetOptions.SplitHorizontalValue := _intValue;
+        end;
+      end; //if
+    end; //_FindParam
+
+  begin
+    b := true;
+    s := xml.Attributes.ItemsByName['config:name'];
+    if (length(s) = 0) then
+      exit;
+
+    for i := 0 to XMLSS.Sheets.Count - 1 do
+      if (XMLSS.Sheets[i].Title = s) then
+      begin
+        _Sheet := XMLSS.Sheets[i];
+        b := false;
+        break;
+      end;
+    if (b) then
+      exit;
+
+    while not ((xml.TagName = 'config:config-item-map-entry') and (xml.TagType = 6)) do
+    begin
+      if (xml.Eof()) then
+        break;
+
+      if (xml.TagName = 'config:config-item') then
+      begin
+        if (xml.TagType = 4) then
+        begin
+          _ConfigName := xml.Attributes.ItemsByName['config:name'];
+          _ConfigType := xml.Attributes.ItemsByName['config:type'];
+        end else
+        begin
+          _ConfigValue := xml.TextBeforeTag;
+          if (TryStrToInt(_ConfigValue, _intValue)) then
+            _FindParam();
+        end; //if
+      end; //if
+      xml.ReadTag();
+    end; //while
+  end; //_ReadSettingsPage
+
+  procedure _ReadSettings();
+  begin
+    while not ((xml.TagName = 'config:config-item-map-named') and (xml.TagType = 6)) do
+    begin
+      if (xml.Eof) then
+        break;
+
+      xml.ReadTag();
+      _ReadSettingsPage();
+    end; //while
+  end; //_ReadSettings
+
+begin
+  result := false;
+  xml := nil;
+  try
+    xml := TZsspXMLReaderH.Create();
+    xml.AttributesMatch := false;
+    if (xml.BeginReadStream(stream) <> 0) then
+      exit;
+
+    while (not xml.Eof()) do
+    begin
+      xml.ReadTag();
+      if ((xml.TagName = 'config:config-item-map-named') and (xml.TagType = 4)) then
+        if (xml.Attributes.ItemsByName['config:name'] = 'Tables') then
+          _ReadSettings();
+    end; //while
+
+    result := true;
+  finally
+    if (Assigned(xml)) then
+      FreeAndNil(xml);
+  end;
+end; //ReadODFSettings
+
 //Читает распакованный ODS
 //INPUT
 //  var XMLSS: TZEXMLSS - хранилище
@@ -2634,6 +2937,16 @@ begin
     //метаинформация (meta.xml)
 
     //настройки (settings.xml)
+    try
+      stream := TFileStream.Create(DirName + 'settings.xml', fmOpenRead or fmShareDenyNone);
+    except
+      result := 2;
+      exit;
+    end;
+    if (not ReadODFSettings(XMLSS, stream)) then
+      result := result or 2;
+    FreeAndNil(stream);
+
   finally
     if (Assigned(stream)) then
       FreeAndNil(stream);
@@ -2670,20 +2983,27 @@ begin
   try
     lst := TStringList.Create();
     lst.Clear();
-    lst.Add('content.xml'); //пока только содержимое без стилей
+    lst.Add('content.xml'); //содержимое
     ZH := TODFZipHelper.Create();
     ZH.XMLSS := XMLSS;
     u_zip := TUnZipper.Create();
     u_zip.FileName := FileName;
     u_zip.OnCreateStream := @ZH.DoCreateOutZipStream;
     u_zip.OnDoneStream := @ZH.DoDoneOutZipStream;
+    ZH.FileType := 0;
     u_zip.UnZipFiles(lst);
-
     result := result or ZH.RetCode;
 
     //метаинформация (meta.xml)
 
     //настройки (settings.xml)
+    lst.Clear();
+    lst.Add('settings.xml'); //настройки
+    ZH.FileType := 1;
+    u_zip.UnZipFiles(lst);
+
+    result := result or ZH.RetCode;
+
   finally
     if (Assigned(u_zip)) then
       FreeAndNil(u_zip);
