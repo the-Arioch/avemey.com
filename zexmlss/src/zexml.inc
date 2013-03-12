@@ -1,4 +1,6 @@
 
+{$T-}
+
 // Если не используется ZColorStringGrid 
 {$DEFINE NOZCOLORSTRINGGRID}
 
