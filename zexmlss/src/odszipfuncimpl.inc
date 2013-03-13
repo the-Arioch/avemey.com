@@ -1,14 +1,16 @@
 {
-implementation: function for XLSX zip (delphi)
+implementation: function for ODS zip (delphi)
+
 }
 
 {
-function SaveXmlssToXLSX(var XMLSS: TZEXMLSS; FileName: string; const SheetsNumbers:array of integer;
+function SaveXmlssToODFS(var XMLSS: TZEXMLSS; FileName: string; const SheetsNumbers:array of integer;
                          const SheetsNames: array of string; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring = ''): integer; overload;
 begin
+
 end; //SaveXmlssToODFS
 
-function ReadXLSX(var XMLSS: TZEXMLSS; FileName: string): integer;
+function ReadODFS(var XMLSS: TZEXMLSS; FileName: string): integer;
 begin
 end; //ReadODFS
 }
