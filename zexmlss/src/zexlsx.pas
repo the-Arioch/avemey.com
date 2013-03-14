@@ -3976,6 +3976,55 @@ begin
   end;
 end; //ZEXLSXCreateWorkBook
 
+// Поскольку в XLSX формат ячеек - тоже часть стиля, то стили придется по мере сохранения ячеек
+type
+   TZXLSXStyleAtomsBase = class
+       public
+         /// XlDelta - номер, с которого надо начинать нумеровать наши элементы стиля
+         /// Например Number Format - надо пропустить более полутора сотен предопределённых
+         /// Например Fills - нужно засунуть два элемента, белый и серый
+         /// Фактически - это номер, с которого начнётся нумерация, вместо нуля
+         constructor Create(const Styles: TZStyles; const XlDelta: word = 0); virtual;
+         procedure   WriteTo(const xml: TZsspXMLWriterH);
+       protected
+         XlDelta: cardinal;
+         Styles:  TZStyles;
+
+         function    AtomsCount: integer; virtual; abstract;
+         procedure   WriteBegin(const xml: TZsspXMLWriterH); virtual; abstract;
+         procedure   WriteEnd(const xml: TZsspXMLWriterH);  virtual; abstract;
+         procedure   WriteItem(const xml: TZsspXMLWriterH; const i: integer);  virtual; abstract;
+   end;
+
+constructor TZXLSXStyleAtomsBase.Create(const Styles: TZStyles;
+  const XlDelta: word);
+begin
+  Self.Styles := Styles;
+  Self.XlDelta := XlDelta;
+end;
+
+procedure TZXLSXStyleAtomsBase.WriteTo(const xml: TZsspXMLWriterH); var i: integer;
+begin
+  if nil = xml then exit;
+  WriteBegin(xml);
+  try
+    for i := 0 to AtomsCount - 1 do
+        WriteItem(xml, i);
+  finally
+    WriteEnd(xml);
+  end;
+end;
+
+type
+   TZXLSXStyleAtomsFFS = class(TZXLSXStyleAtomsBase)
+      protected
+          AtomList: array of integer;
+          function IsEqual (const i, j: integer): boolean; virtual; abstract;
+      public
+          function AddStyle( const i: integer): integer; virtual; abstract;
+   end;
+
+
 //Создаёт styles.xml
 //INPUT
 //  var XMLSS: TZEXMLSS                 - хранилище
@@ -3985,7 +4034,7 @@ end; //ZEXLSXCreateWorkBook
 //    BOM: ansistring                   - BOM
 //RETURN
 //      integer
-function ZEXLSXCreateStyles(var XMLSS: TZEXMLSS; Stream: TStream; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
+function ZEXLSXCreateStyles(var XMLSS: TZEXMLSS; Stream: TStream; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer; deprecated; // number format ?
 var
   _xml: TZsspXMLWriterH;        //писатель
   _FontIndex: TIntegerDynArray;  //соответствия шрифтов
@@ -5373,5 +5422,6 @@ end;
 {$IFNDEF FPC}
 {$I xlsxzipfuncimpl.inc}
 {$ENDIF}
+
 
 end.
