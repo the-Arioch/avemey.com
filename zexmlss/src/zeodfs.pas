@@ -98,8 +98,10 @@ implementation
 uses StrUtils;
 
 const
-  ZETag_StyleFontFace       = 'style:font-face';      //style:font-face
-  ZETag_Attr_StyleName      = 'style:name';           //style:name
+  ZETag_StyleFontFace       = 'style:font-face';      // ODS v.1.2  ch.16.21 <style:font-face>
+  ZETag_Attr_StyleName      = 'style:name';           // ODS v.1.2  ch.19.498 style:name
+  ZETag_Style_Default       = 'style:default-style';  // ODS v.1.2  ch.16.4 <style:default-style>
+  ZETag_Style               = 'style:style';          // ODS v.1.2  ch.16.2 <style:style>
 
 type
   TZODFColumnStyle = record
@@ -574,8 +576,23 @@ begin
   end;
 
   //TODO: по умолчанию no-wrap?
-  if (ProcessedStyle.Alignment.WrapText) then
-    _xml.Attributes.Add('fo:wrap-option', 'wrap');
+(* Никакoго "по умолчанию" нет. Кроме Default Style
+   Соотв. и писать надо либо default, либо отличия от него.
+-------- OpenDocument-v1.2-os-schema.rng -----
+			<optional>
+				<attribute name="fo:wrap-option">
+					<choice>
+						<value>no-wrap</value>
+						<value>wrap</value>
+					</choice>
+				</attribute>
+			</optional>
+-------- *)
+  if isDefaultStyle or
+     (XMLSS.Styles.DefaultStyle.Alignment.WrapText <> ProcessedStyle.Alignment.WrapText)
+  then
+    _xml.Attributes.Add('fo:wrap-option',
+         IfThen( ProcessedStyle.Alignment.WrapText, 'wrap', 'no-wrap') );
 
   for j := n to 5 do
   begin
@@ -840,7 +857,7 @@ begin
     _xml.Attributes.Clear();
     _xml.Attributes.Add(ZETag_Attr_StyleName, 'Default');
     _xml.Attributes.Add('style:family', 'table-cell', false);
-    _xml.WriteTagNode('style:style', true, true, true);
+    _xml.WriteTagNode(ZETag_Style, true, true, true);
     ODFWriteTableStyle(XMLSS, _xml, -1, true);
     _xml.WriteEndTagNode();
 
@@ -1026,7 +1043,7 @@ var
       _xml.Attributes.Clear();
       _xml.Attributes.Add(ZETag_Attr_StyleName, 'co' + IntToStr(now_StyleNumber));
       _xml.Attributes.Add('style:family', 'table-column', false);
-      _xml.WriteTagNode('style:style', true, true, false);
+      _xml.WriteTagNode(ZETag_Style, true, true, false);
 
       _xml.Attributes.Clear();
       //разрыв страницы (fo:break-before = auto | column | page)
@@ -1038,7 +1055,7 @@ var
       _xml.Attributes.Add('style:column-width', ZEFloatSeparator(FormatFloat('0.###', XMLSS.Sheets[_pages[now_i]].Columns[now_j].WidthMM / 10)) + 'cm', false);
       _xml.WriteEmptyTag('style:table-column-properties', true, false);
 
-      _xml.WriteEndTagNode(); //style:style
+      _xml.WriteEndTagNode(); // ZETag_Style ==> style:style
       start_j := now_j + 1;
       ColumnStyle[now_i][now_j] := now_StyleNumber;
       for i := now_i to count_i do
@@ -1076,7 +1093,7 @@ var
       _xml.Attributes.Clear();
       _xml.Attributes.Add(ZETag_Attr_StyleName, 'ro' + IntToStr(now_StyleNumber));
       _xml.Attributes.Add('style:family', 'table-row', false);
-      _xml.WriteTagNode('style:style', true, true, false);
+      _xml.WriteTagNode(ZETag_Style, true, true, false);
 
       _xml.Attributes.Clear();
       //разрыв страницы (fo:break-before = auto | column | page)
@@ -1100,7 +1117,7 @@ var
       //?? fo:keep-together - неразрывные строки (auto | always)
       _xml.WriteEmptyTag('style:table-row-properties', true, false);
 
-      _xml.WriteEndTagNode(); //style:style
+      _xml.WriteEndTagNode(); // ZETag_Style ==> style:style
       start_j := now_j + 1;
       RowStyle[now_i][now_j] := now_StyleNumber;
       for i := now_i to count_i do
@@ -1182,9 +1199,9 @@ var
       _xml.Attributes.Add(ZETag_Attr_StyleName, 'ce' + IntToStr(i));
       _xml.Attributes.Add('style:family', 'table-cell', false);
         //??style:parent-style-name = Default
-      _xml.WriteTagNode('style:style', true, true, false);
+      _xml.WriteTagNode(ZETag_Style , true, true, false);
       ODFWriteTableStyle(XMLSS, _xml, i, false);
-      _xml.WriteEndTagNode(); //style:style
+      _xml.WriteEndTagNode(); // ZETag_Style ==> style:style
     end;
 
     _xml.WriteEndTagNode(); //office:automatic-styles
@@ -2066,7 +2083,7 @@ var
       _style.Assign(XMLSS.Styles.DefaultStyle);
       HAutoForced := false; // pre-clean: paragraph properties may come before cell properties
 
-      while (not IfTag('style:style', 6)) do
+      while (not IfTag(ZETag_Style , 6)) do
       begin
         if (xml.Eof()) then
           break;
@@ -2154,11 +2171,13 @@ var
           if (length(s) > 0) then
             ZEStrToODFBorderStyle(s, _style.Border[5]);
 
-          //Перенос по словам (wrap no-wrap)
-          s := xml.Attributes.ItemsByName['fo:wrap-option'];
-          if (length(s) > 0) then
-            if (UpperCase(s) = 'WRAP') then
-              _style.Alignment.WrapText := true;
+          // Перенос по словам (wrap no-wrap :: ODF v.1.2)
+          s := LowerCase(xml.Attributes.ItemsByName['fo:wrap-option']);
+          if (s = 'wrap') then
+              _style.Alignment.WrapText := true
+          else if (s = 'no-wrap') then
+              _style.Alignment.WrapText := false;
+          // все остальные значения - ошибка. Игнорируем, оставляем значение из DefaultStyle
         end else //if
 
         if ((xml.TagName = 'style:paragraph-properties') and (xml.TagType in [4, 5])) then
@@ -2240,7 +2259,7 @@ var
           break;
         xml.ReadTag();
 
-        if (IfTag('style:style', 4)) then
+        if (IfTag(ZETag_Style, 4)) then
         begin
           _stylefamily := xml.Attributes.ItemsByName['style:family'];
           _stylename := xml.Attributes.ItemsByName[ZETag_Attr_StyleName];
@@ -2256,7 +2275,7 @@ var
             ODFColumnStyles[ColStyleCount].breaked := false;
             ODFColumnStyles[ColStyleCount].width := 25;
 
-            while (not IfTag('style:style', 6)) do
+            while (not IfTag(ZETag_Style, 6)) do
             begin
               if (xml.Eof()) then
                 break;
@@ -2287,7 +2306,7 @@ var
             ODFRowStyles[RowStyleCount].color := clBlack;
             ODFRowStyles[RowStyleCount].height := 10;
 
-            while (not ifTag('style:style', 6)) do
+            while (not ifTag(ZETag_Style, 6)) do
             begin
               if (xml.Eof()) then
                 break;
@@ -2319,7 +2338,7 @@ var
             end;
             ODFTableStyles[TableStyleCount].name := _stylename;
             ODFTableStyles[TableStyleCount].isColor := false;
-            while (not ifTag('style:style', 6)) do
+            while (not ifTag(ZETag_Style, 6)) do
             begin
               if (xml.Eof()) then
                 break;
