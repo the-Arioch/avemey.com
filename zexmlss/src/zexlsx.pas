@@ -1718,13 +1718,19 @@ var
           _diagUP := ZEStrToBoolean(s);
       end else
       begin
+
+        // TODO: ECMA 376 mentions 'begin', 'start' and 'end' as valid tags here
+        //   instead of 'left' and 'right'
+        //   this MAYBE have different meanings in LTR and RTL languages
+        //   need real-world documents to check
+
         if (xml.TagType in [4, 5]) then
         begin
-          if (xml.TagName = 'left') then
+          if (xml.TagName = 'left') or (xml.TagName = 'begin') or (xml.TagName = 'start') then
           begin
             _SetCurBorder(0);
           end else
-          if (xml.TagName = 'right') then
+          if (xml.TagName = 'right') or (xml.TagName = 'end') then
           begin
             _SetCurBorder(2);
           end else
@@ -1748,14 +1754,14 @@ var
                 _SetCurBorder(4);
             end;
           end else
-          //??  {
-          if (xml.TagName = 'end') then
-          begin
-          end else
-          if (xml.TagName = 'start') then
-          begin
-          end else
-          //??  }
+//          //??  {
+//          if (xml.TagName = 'end') then
+//          begin
+//          end else
+//          if (xml.TagName = 'start') then
+//          begin
+//          end else
+//          //??  }
           if (xml.TagName = 'color') then
           begin
             _isColor := false;
