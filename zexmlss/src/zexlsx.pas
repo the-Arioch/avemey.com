@@ -947,7 +947,7 @@ var
         //inlineStr - inline string ??
         if (_type = 's') then
         begin
-          _currCell.CellType := ZEansistring;
+          _currCell.CellType := ZEString;
           if (TryStrToInt(v, t)) then
             if ((t >= 0) and (t < StrCount)) then
               v := StrArray[t];
@@ -3976,7 +3976,18 @@ begin
   end;
 end; //ZEXLSXCreateWorkBook
 
-// Поскольку в XLSX формат ячеек - тоже часть стиля, то стили придется по мере сохранения ячеек
+// В Excel можно установить не больше 4К стилей. Кажется, много, но...
+// При заполнении таблицы по шагам, когда конечный стиль ячейки не известен до самого сохранения,
+//   остаётся множество полу-заполненных стилей. При сохранении желательно иметь возможность
+//   только записывать реально использованные стили. В интернете много историй, когда люди
+//   упирались в эту границу. Это можно получить сохраняя стили после ячеек и при записи Cell[i,j]
+//   сохранять ~~~ xml.Attributes.StyleId := StyleStorage.Add(Cell[i,j].CellStyle)
+// Также хочется убрaть повторяющийся код (done).
+// Наконец хочется получить возможность использовать "умолчальные" форматы и заливки, а не
+//   просто сохранять их и никогда не использовать. Особенно учитывая слухи, что форматов
+//   ячеек может быть не более 512: http://openxmldeveloper.org/discussions/formats/f/14/t/242.aspx
+//   С другой стороны для некоторых встроенных типов Excel нарушает стандартю
+//     MS-OI29500: Microsoft Office Implementation Information for ISO/IEC-29500 Standard Compliance
 type
    TZXLSXStyleAtomsBase = class
        public
@@ -3984,23 +3995,122 @@ type
          /// Например Number Format - надо пропустить более полутора сотен предопределённых
          /// Например Fills - нужно засунуть два элемента, белый и серый
          /// Фактически - это номер, с которого начнётся нумерация, вместо нуля
-         constructor Create(const Styles: TZStyles; const XlDelta: word = 0); virtual;
-         procedure   WriteTo(const xml: TZsspXMLWriterH);
+         constructor Create(const Styles: TZStyles); virtual;
+         procedure   WriteTo(const xml: TZsspXMLWriterH); virtual;
+
+         // returns the reference number of style element in XLSX collection
+         // for example for Fills it would start with 2, not with 0
+         function    AddStyle(const i: integer): integer; virtual;
+
        protected
          XlDelta: cardinal;
          Styles:  TZStyles;
 
-         function    AtomsCount: integer; virtual; abstract;
-         procedure   WriteBegin(const xml: TZsspXMLWriterH); virtual; abstract;
-         procedure   WriteEnd(const xml: TZsspXMLWriterH);  virtual; abstract;
+         AtomsReMap: array of integer; // number in the store, -1 if not saved yet
+
+         procedure EnsureRemapSize(const MaxIdx: integer);
+         procedure BeforeDestruction; override;
+
+         function IsEqual (const i, j: integer): boolean; virtual; abstract;
+         function AddStyleToStore(const i: integer): integer; virtual; abstract;
+         function AtomsCount: integer; virtual; abstract;
+
+       protected
+         procedure   WriteBegin(const xml: TZsspXMLWriterH); virtual;
+         procedure   WriteEnd(const xml: TZsspXMLWriterH);  virtual;
+
+         function    WriteBegin_TagName: string; virtual; abstract;
+
+         // mismatch between AtomsCount and collection tag attribute - for fills
+         function    WriteBegin_Attrs_Count_Delta: integer; virtual;
+         procedure   WriteBegin_Attrs(const attrs: TZAttributesH); virtual;
+
+         // i is against actual stored XLSX elements, not against TZStyles index
          procedure   WriteItem(const xml: TZsspXMLWriterH; const i: integer);  virtual; abstract;
    end;
 
-constructor TZXLSXStyleAtomsBase.Create(const Styles: TZStyles;
-  const XlDelta: word);
+procedure TZXLSXStyleAtomsBase.BeforeDestruction;
+begin
+  AtomsReMap := nil;
+  inherited;
+end;
+
+constructor TZXLSXStyleAtomsBase.Create(const Styles: TZStyles);
 begin
   Self.Styles := Styles;
-  Self.XlDelta := XlDelta;
+  Self.XlDelta := 0;
+
+  EnsureRemapSize(Styles.Count);
+end;
+
+procedure TZXLSXStyleAtomsBase.EnsureRemapSize(const MaxIdx: integer);
+var o, i: integer;
+begin
+//  MaxIdx should be oincreased to store -1 default style
+
+  o := Length(AtomsReMap);
+  if o <= MaxIdx then begin
+     SetLength(AtomsReMap, MaxIdx + 1);
+     for i := o to MaxIdx do
+         AtomsReMap[i] := - 1;
+  end;
+end;
+
+function TZXLSXStyleAtomsBase.AddStyle(const i: integer): integer;
+var idx, j: integer;
+begin
+  Assert( i >= -1 );
+  Assert( i < Self.Styles.Count );
+
+  EnsureRemapSize(i);
+
+  idx := i + 1;  // account for DefaultStyle having index - 1
+
+  try
+
+    // Had we already added this ?
+    Result := AtomsReMap[idx];
+    if Result >= 0 then exit; // already added
+
+    for j := 0 to i do begin
+        Result := AtomsReMap[j];
+        if Result >= 0 then begin // something was stored there
+           if Self.IsEqual(i, j - 1) then begin
+               AtomsReMap[idx] := Result;  // save mapping for future
+               exit;                       // was already added
+           end;
+        end;
+    end;
+
+    Result := AddStyleToStore(i); // inherited classes should do the actuall save!
+    AtomsReMap[idx] := Result;   //  save mapping for future
+
+  finally
+    Inc( Result, XlDelta);  // change from TList index to XLSX index
+  end;
+end;
+
+
+procedure TZXLSXStyleAtomsBase.WriteEnd(const xml: TZsspXMLWriterH);
+begin
+  xml.WriteEndTagNode;
+end;
+
+procedure TZXLSXStyleAtomsBase.WriteBegin(const xml: TZsspXMLWriterH);
+begin
+  xml.Attributes.Clear;
+  WriteBegin_Attrs(xml.Attributes);
+  xml.WriteTagNode(WriteBegin_TagName(), True, True, False);
+end;
+
+procedure TZXLSXStyleAtomsBase.WriteBegin_Attrs(const attrs: TZAttributesH);
+begin
+  attrs.Add('count', IntToStr( AtomsCount() + WriteBegin_Attrs_Count_Delta() ));
+end;
+
+function TZXLSXStyleAtomsBase.WriteBegin_Attrs_Count_Delta: integer;
+begin
+  Result := 0;
 end;
 
 procedure TZXLSXStyleAtomsBase.WriteTo(const xml: TZsspXMLWriterH); var i: integer;
@@ -4008,21 +4118,821 @@ begin
   if nil = xml then exit;
   WriteBegin(xml);
   try
-    for i := 0 to AtomsCount - 1 do
+    for i := 0 to AtomsCount - 1 do begin
+        xml.Attributes.Clear;
         WriteItem(xml, i);
+    end;
   finally
+    xml.Attributes.Clear;
     WriteEnd(xml);
   end;
 end;
 
 type
-   TZXLSXStyleAtomsFFS = class(TZXLSXStyleAtomsBase)
+   TZXLSXStyleAtomsFFB = class(TZXLSXStyleAtomsBase)
       protected
-          AtomList: array of integer;
-          function IsEqual (const i, j: integer): boolean; virtual; abstract;
-      public
-          function AddStyle( const i: integer): integer; virtual; abstract;
+         AtomsStore: TList; // actually needed elements of style
+
+         procedure BeforeDestruction; override;
+         procedure AfterConstruction; override;
+
+         // changes style number to the actual pointer to font, fill or border
+         function StyleToPointer(const i: integer): Pointer; virtual; abstract;
+         function IsEqualByPtr(const p, q: Pointer): boolean; virtual; abstract;
+
+         function IsEqual (const i, j: integer): boolean; override;
+
+         function AddStyleToStore(const i: integer): integer; override;
+         function AtomsCount: integer; override;
    end;
+
+{TZXLSXStyleAtomsFFB}
+
+procedure TZXLSXStyleAtomsFFB.AfterConstruction;
+begin
+  inherited;
+  AtomsStore := TList.Create;
+end;
+
+procedure TZXLSXStyleAtomsFFB.BeforeDestruction;
+begin
+  inherited;
+  AtomsStore.Free;
+end;
+
+function TZXLSXStyleAtomsFFB.IsEqual(const i, j: integer): boolean;
+var p, q: pointer;
+begin
+  p := StyleToPointer(i);
+  q := StyleToPointer(j);
+
+  Result := p = q; // а вдруг ?
+  if not Result then
+     Result := IsEqualByPtr(p, q);
+end;
+
+function TZXLSXStyleAtomsFFB.AtomsCount: integer;
+begin
+  Result := AtomsStore.Count;
+end;
+
+function TZXLSXStyleAtomsFFB.AddStyleToStore(const i: integer): integer;
+begin
+  Result := AtomsStore.Add(StyleToPointer(i));
+end;
+
+type TZXLSXStyleNumFmt = class(TZXLSXStyleAtomsBase)
+      protected
+         AtomsStore: TStringList; // actually needed elements of style
+
+         function FormulaToXml(const f: string): string;  deprecated; // TODO
+
+         procedure BeforeDestruction; override;
+         procedure AfterConstruction; override;
+
+         function IsEqual (const i, j: integer): boolean; override;
+
+         function StyleToStr(const i: integer): string;
+         function AddStyleToStore(const i: integer): integer; override;
+
+         function AtomsCount: integer; override;
+
+         function WriteBegin_TagName: string; override;
+
+         // i is against actual stored XLSX elements, not against TZStyles index
+         procedure   WriteItem(const xml: TZsspXMLWriterH; const i: integer);  override;
+   end;
+
+{ TZXLSXStyleNumFmt }
+
+procedure TZXLSXStyleNumFmt.BeforeDestruction;
+begin
+  inherited;
+  AtomsStore.Free;
+end;
+
+procedure TZXLSXStyleNumFmt.AfterConstruction;
+begin
+  inherited;
+  AtomsStore := TStringList.Create;
+  AtomsStore.Duplicates := dupError;
+
+// откуда надо начинать нумеровать свои форматы?
+// * ECMA 376 ed.4 ch.18.8.30 numFmt (Number Format) резервирует номерa 0..81
+// * Excel 2010 Rus сохраняет форматы начиная с 164, но это нигде не документировано
+// * Однако для кого-то работают только числв 176+
+//        http://social.msdn.microsoft.com/Forums/sa/oxmlsdk/thread/3919af8c-644b-4d56-be65-c5e1402bfcb6
+// Оставим себе запас и круглое число.
+
+  Self.XlDelta := 200;
+end;
+
+function TZXLSXStyleNumFmt.AtomsCount: integer;
+begin
+  Result := AtomsStore.Count;
+end;
+
+function TZXLSXStyleNumFmt.WriteBegin_TagName: string;
+begin
+  Result := 'numFmts';
+end;
+
+procedure TZXLSXStyleNumFmt.WriteItem(const xml: TZsspXMLWriterH;
+  const i: integer);
+begin
+  with xml.Attributes do begin
+//       Clear; - by parent
+       Add('formatCode', FormulaToXml(AtomsStore[i]), False);
+       Add('numFmtId', IntToStr(i + Self.XlDelta) );
+  end;
+  xml.WriteEmptyTag('numFmt', True, False);
+end;
+
+function TZXLSXStyleNumFmt.FormulaToXml(const f: string): string;
+begin
+  Result := ZEReplaceEntity(f); // TODO actual conversion
+end;
+
+function TZXLSXStyleNumFmt.StyleToStr(const i: integer): string;
+begin
+  Result := Self.Styles[i].NumberFormat;
+  if Trim(Result) = '' then Result := 'General';
+end;
+
+function TZXLSXStyleNumFmt.IsEqual(const i, j: integer): boolean;
+begin
+  Result := StyleToStr(i) = StyleToStr(j);
+end;
+
+function TZXLSXStyleNumFmt.AddStyleToStore(const i: integer): integer;
+begin
+  Result := AtomsStore.Add(StyleToStr(i));
+end;
+
+
+type
+  TZXLSXStyleAtomsFont = class(TZXLSXStyleAtomsFFB)
+     protected
+
+         // changes style number to the actual pointer to font, fill or border
+         function StyleToPointer(const i: integer): Pointer; override;
+         function IsEqualByPtr(const p, q: Pointer): boolean; override;
+
+         function WriteBegin_TagName: string; override;
+         // i is against actual stored XLSX elements, not against TZStyles index
+         procedure   WriteItem(const xml: TZsspXMLWriterH; const i: integer);  override;
+   end;
+
+  TZXLSXStyleAtomsFills = class(TZXLSXStyleAtomsFFB)
+     protected
+
+         // changes style number to the actual pointer to font, fill or border
+         function StyleToPointer(const i: integer): Pointer; override;
+         function IsEqualByPtr(const p, q: Pointer): boolean; override;
+
+         function WriteBegin_TagName: string; override;
+         // i is against actual stored XLSX elements, not against TZStyles index
+         procedure WriteItem(const xml: TZsspXMLWriterH; const i: integer);  override;
+
+         procedure   WriteBegin(const xml: TZsspXMLWriterH); override;
+
+         // mismatch between AtomsCount and collection tag attribute - for fills
+         function    WriteBegin_Attrs_Count_Delta: integer; override;
+         procedure   AfterConstruction; override;
+   end;
+
+  TZXLSXStyleAtomsBorders = class(TZXLSXStyleAtomsFFB)
+     protected
+
+         // changes style number to the actual pointer to font, fill or border
+         function StyleToPointer(const i: integer): Pointer; override;
+         function IsEqualByPtr(const p, q: Pointer): boolean; override;
+
+         function WriteBegin_TagName: string; override;
+         // i is against actual stored XLSX elements, not against TZStyles index
+         procedure   WriteItem(const xml: TZsspXMLWriterH; const i: integer);  override;
+   end;
+
+{ TZXLSXStyleAtomsFills }
+
+function TZXLSXStyleAtomsFills.IsEqualByPtr(const p, q: Pointer): boolean;
+  function _isFillsEqual(style1, style2: TZStyle): boolean;
+  begin
+    result := (style1.BGColor = style2.BGColor) and
+              (style1.PatternColor = style2.PatternColor) and
+              (style1.CellPattern = style2.CellPattern);
+  end; //_isFillsEqual
+begin
+  Result := _isFillsEqual(TZStyle(p), TZStyle(q));
+end;
+
+function TZXLSXStyleAtomsFills.StyleToPointer(const i: integer): Pointer;
+begin
+  Result := Self.Styles[i];
+end;
+
+procedure TZXLSXStyleAtomsFills.AfterConstruction;
+begin
+  inherited;
+  Self.XlDelta := 2; // сохраняем две лишние заливки
+end;
+
+function TZXLSXStyleAtomsFills.WriteBegin_Attrs_Count_Delta: integer;
+begin
+  Result := Self.XlDelta;
+end;
+
+function TZXLSXStyleAtomsFills.WriteBegin_TagName: string;
+begin
+  Result := 'fills';
+end;
+
+procedure TZXLSXStyleAtomsFills.WriteBegin(const xml: TZsspXMLWriterH);
+  procedure _WriteBlankFill(const st: string);
+  begin
+    xml.Attributes.Clear();
+    xml.WriteTagNode('fill', true, true, true);
+    xml.Attributes.Clear();
+    xml.Attributes.Add('patternType', st);
+    xml.WriteEmptyTag('patternFill', true, false);
+    xml.WriteEndTagNode(); //fill
+  end; //_WriteBlankFill
+begin
+  inherited;
+
+  //по какой-то непонятной причине, если в начале нету двух стилей заливок (none + gray125),
+  //в грёбаном 2010-ом офисе глючат заливки (то-ли чтобы сложно было сделать экспорт в xlsx, то-ли
+  //кривые руки у мелкомягких программеров). LibreOffice открывает нормально.
+  _WriteBlankFill('none');
+  _WriteBlankFill('gray125');
+end;
+
+procedure TZXLSXStyleAtomsFills.WriteItem(const xml: TZsspXMLWriterH;
+  const i: integer);
+var Sty: TZStyle; s: String; b, _reverse: Boolean; _tmpColor: TColor;
+begin
+    //TODO:
+    //ВНИМАНИЕ!!! //{tut}
+    //в некоторых случаях fgColor - это цвет заливки (вроде для solid), а в некоторых - bgColor.
+    //Потом не забыть разобраться.
+
+    Sty := TZStyle(AtomsStore[i]);
+
+    xml.Attributes.Clear();
+    xml.WriteTagNode('fill', true, true, true);
+
+    case Sty.CellPattern of
+      ZPSolid:      s := 'solid';
+      ZPNone:       s := 'none';
+      ZPGray125:    s := 'gray125';
+      ZPGray0625:   s := 'gray0625';
+      ZPDiagStripe: s := 'darkUp';
+      ZPGray50:     s := 'mediumGray';
+      ZPGray75:     s := 'darkGray';
+      ZPGray25:     s := 'lightGray';
+      ZPHorzStripe: s := 'darkHorizontal';
+      ZPVertStripe: s := 'darkVertical';
+      ZPReverseDiagStripe:  s := 'darkDown';
+//        ZPDiagStripe:         s := 'darkUpDark'; ??
+      ZPDiagCross:          s := 'darkGrid';
+      ZPThickDiagCross:     s := 'darkTrellis';
+      ZPThinHorzStripe:     s := 'lightHorizontal';
+      ZPThinVertStripe:     s := 'lightVertical';
+      ZPThinReverseDiagStripe:  s := 'lightDown';
+      ZPThinDiagStripe:         s := 'lightUp';
+      ZPThinHorzCross:          s := 'lightGrid';
+      ZPThinDiagCross:          s := 'lightTrellis';
+      else
+        s := 'solid';
+    end; //case
+    xml.Attributes.Clear();
+    xml.Attributes.Add('patternType', s);
+    b := (Sty.PatternColor <> clWindow) or (Sty.BGColor <> clWindow);
+
+    if (b) then
+      xml.WriteTagNode('patternFill', true, true, false)
+    else
+      xml.WriteEmptyTag('patternFill', true, false);
+
+    _reverse := not (Sty.CellPattern in [ZPNone, ZPSolid]);
+    if (Sty.BGColor <> clWindow) then
+    begin
+      xml.Attributes.Clear();
+      if (_reverse) then
+        _tmpColor := Sty.PatternColor
+      else
+        _tmpColor := Sty.BGColor;
+      xml.Attributes.Add('rgb', '00' + ColorToHTMLHex(_tmpColor));
+      xml.WriteEmptyTag('fgColor', true);
+    end;
+
+    if (Sty.PatternColor <> clWindow) then
+    begin
+      xml.Attributes.Clear();
+      if (_reverse) then
+        _tmpColor := Sty.BGColor
+      else
+        _tmpColor := Sty.PatternColor;
+      xml.Attributes.Add('rgb', '00' + ColorToHTMLHex(_tmpColor));
+      xml.WriteEmptyTag('bgColor', true);
+    end;
+
+    if (b) then
+      xml.WriteEndTagNode(); //patternFill
+
+    xml.WriteEndTagNode(); //fill
+end;
+
+{ TZXLSXStyleAtomsBorders }
+
+function TZXLSXStyleAtomsBorders.IsEqualByPtr(const p, q: Pointer): boolean;
+begin
+  Result := TZBorder(p).IsEqual(TZBorder(q));
+end;
+
+function TZXLSXStyleAtomsBorders.StyleToPointer(const i: integer): Pointer;
+begin
+  Result := Self.Styles[i].Border;
+end;
+
+function TZXLSXStyleAtomsBorders.WriteBegin_TagName: string;
+begin
+  Result := 'borders';
+end;
+
+procedure TZXLSXStyleAtomsBorders.WriteItem(const xml: TZsspXMLWriterH;
+  const i: integer);
+var brd: TZBorder;
+
+  //единичная граница
+  procedure _WriteBorderItem(const BorderNum: integer);
+  var
+    s, s1: string;
+    _border: TZBorderStyle;
+    n: integer;
+
+  begin
+    xml.Attributes.Clear();
+
+    // Microsoft is so cool about border names for leftmost and rightmost ones!
+    //    Perhaps they tried to adapt to RTL languages.
+    // ISO/IEC 29500-1 (aka 1st Edition) claims "start" and "end" in ch. 18.8.4 border Child Elements
+    //    and claims "left" and "right" in ch.18.8.5 borders example
+    // ISO/IEC 29500:2012 (aka ECMA 376, 4th Edition) claims
+    //    "begin" and "end" in ch.18.8.5 borders example
+    //    "start" and "end" in referenced XML Schema "(CT_Borders) is located in §A.2"
+    //    "left"  and "right" in 18.8.4 border preface.
+    case BorderNum of
+      0: s := 'left';
+      1: s := 'top';
+      2: s := 'right';
+      3: s := 'bottom';
+      else
+        s := 'diagonal';
+    end;
+    _border := brd[BorderNum];
+    s1 := '';
+    if _border.Weight > 0 then
+    case _border.LineStyle of
+      ZEContinuous:
+       case _border.Weight of
+           1: s1 := 'thin'; // 'hair' is dashed - " -  -  -  -  - "
+           2: s1 := 'medium';
+         else s1 := 'thick';
+        end;
+      ZEDash:
+        begin
+          if (_border.Weight = 1) then
+            s1 := 'dashed'
+          else
+//          if (_border.Weight >= 2) then
+            s1 := 'mediumDashed';
+        end;
+      ZEDot:
+        begin
+          if (_border.Weight = 1) then
+            s1 := 'dotted'
+          else
+//          if (_border.Weight >= 2) then
+            s1 := 'mediumDotted';
+        end;
+      ZEDashDot:
+        begin
+          if (_border.Weight = 1) then
+            s1 := 'dashDot'
+          else
+//          if (_border.Weight >= 2) then
+            s1 := 'mediumDashDot';
+        end;
+      ZEDashDotDot:
+        begin
+          if (_border.Weight = 1) then
+            s1 := 'dashDotDot'
+          else
+//          if (_border.Weight >= 2) then
+            s1 := 'mediumDashDotDot';
+        end;
+      ZESlantDashDot:
+        begin
+          s1 := 'slantDashDot';
+        end;
+      ZEDouble:
+        begin
+          s1 := 'double';
+        end;
+      ZENone:
+        begin
+        end;
+    end; //case
+
+    n := length(s1);
+
+    if (n > 0) then
+      xml.Attributes.Add('style', s1);
+
+    if ((_border.Color <> clBlack) and (n > 0)) then
+    begin
+      xml.WriteTagNode(s, true, true, true);
+      xml.Attributes.Clear();
+      xml.Attributes.Add('rgb', '00' + ColorToHTMLHex(_border.Color));
+      xml.WriteEmptyTag('color', true);
+      xml.WriteEndTagNode();
+    end else
+      xml.WriteEmptyTag(s, true);
+  end; //_WriteBorderItem
+
+procedure _WriteDiag(const i: integer; const attr: string); var b: Boolean;
+begin
+  b := (brd.Border[i].Weight > 0) and (brd.Border[i].LineStyle <> ZENone);
+  xml.Attributes.Add(attr, IfThen(b, 'true', 'false'));
+end;
+
+Begin
+    brd := TZBorder(AtomsStore[i]);
+
+    xml.Attributes.Clear();
+//    s := 'false';
+//    if (brd.Border[4].Weight > 0) and (brd.Border[4].LineStyle <> ZENone) then
+//      s := 'true';
+//    xml.Attributes.Add('diagonalDown', s);
+//    s := 'false';
+//    if (brd.Border[5].Weight > 0) and (brd.Border[5].LineStyle <> ZENone) then
+//      s := 'true';
+//    xml.Attributes.Add('diagonalUp', s, false);
+    _WriteDiag(4, 'diagonalDown');
+    _WriteDiag(5, 'diagonalUp');
+
+    xml.WriteTagNode('border', true, true, true);
+
+    _WriteBorderItem(0);
+    _WriteBorderItem(2);
+    _WriteBorderItem(1);
+    _WriteBorderItem(3);
+    _WriteBorderItem(4);
+
+    xml.WriteEndTagNode(); //border
+end;
+
+{ TZXLSXStyleAtomsFont }
+
+function TZXLSXStyleAtomsFont.IsEqualByPtr(const p, q: Pointer): boolean;
+  function _isFontsEqual(const fnt1, fnt2: TFont): boolean;
+  begin  // copied from initial ZEXLSXCreateStyles
+    result := False;
+    if (fnt1.Color <> fnt2.Color) then
+      exit;
+
+    if (fnt1.Height <> fnt2.Height) then
+      exit;
+
+    if (fnt1.Name <> fnt2.Name) then
+      exit;
+
+    if (fnt1.Pitch <> fnt2.Pitch) then
+      exit;
+
+    if (fnt1.Size <> fnt2.Size) then
+      exit;
+
+    if (fnt1.Style <> fnt2.Style) then
+      exit;
+
+    Result := true; // если уж до сюда добрались
+  end; //_isFontsEqual
+begin
+  Result := _isFontsEqual(TFont(p), TFont(q));
+end;
+
+function TZXLSXStyleAtomsFont.StyleToPointer(const i: integer): Pointer;
+begin
+  Result := Self.Styles[i].Font;
+end;
+
+function TZXLSXStyleAtomsFont.WriteBegin_TagName: string;
+begin
+  Result := 'fonts';
+end;
+
+procedure TZXLSXStyleAtomsFont.WriteItem(const xml: TZsspXMLWriterH;
+  const i: integer);
+var fnt: TFont;
+begin
+   fnt := TFont( AtomsStore[i] );
+
+    xml.Attributes.Clear();
+    xml.WriteTagNode('font', true, true, true);
+
+    xml.Attributes.Clear();
+    xml.Attributes.Add('val', fnt.Name);
+    xml.WriteEmptyTag('name', true);
+
+    xml.Attributes.Clear();
+    xml.Attributes.Add('val', IntToStr(fnt.Charset));
+    xml.WriteEmptyTag('charset', true);
+
+    xml.Attributes.Clear();
+    xml.Attributes.Add('val', IntToStr(fnt.Size));
+    xml.WriteEmptyTag('sz', true);
+
+    if (fnt.Color <> clWindowText) then
+    begin
+      xml.Attributes.Clear();
+      xml.Attributes.Add('rgb', '00' + ColorToHTMLHex(fnt.Color));
+      xml.WriteEmptyTag('color', true);
+    end;
+
+    if (fsBold in fnt.Style) then
+    begin
+      xml.Attributes.Clear();
+      xml.Attributes.Add('val', 'true');
+      xml.WriteEmptyTag('b', true);
+    end;
+
+    if (fsItalic in fnt.Style) then
+    begin
+      xml.Attributes.Clear();
+      xml.Attributes.Add('val', 'true');
+      xml.WriteEmptyTag('i', true);
+    end;
+
+    if (fsStrikeOut in fnt.Style) then
+    begin
+      xml.Attributes.Clear();
+      xml.Attributes.Add('val', 'true');
+      xml.WriteEmptyTag('strike', true);
+    end;
+
+    if (fsUnderline in fnt.Style) then
+    begin
+      xml.Attributes.Clear();
+      xml.Attributes.Add('val', 'single');
+      xml.WriteEmptyTag('u', true);
+    end;
+
+    xml.WriteEndTagNode(); //font
+end;
+
+
+
+type
+   TZXLSXStylesAtomsIndices = record
+      Font, Fill, Border, Format: integer;
+   end;
+
+   TZXLSXStylesStore = class (TZXLSXStyleAtomsBase)
+       public
+         // returns the reference number of style element in XLSX collection
+         // for example for Fills it would start with 2, not with 0
+         function    AddStyle(const i: integer): integer; override;
+         procedure   WriteTo(const xml: TZsspXMLWriterH); override;
+
+       protected
+         _nf: TZXLSXStyleNumFmt;
+         _ft: TZXLSXStyleAtomsFont;
+         _fl: TZXLSXStyleAtomsFills;
+         _bd: TZXLSXStyleAtomsBorders;
+
+         _map: array of TZXLSXStylesAtomsIndices;
+         _stored: array of boolean;
+
+         _isXfId: boolean; // for WriteItem
+
+         procedure BeforeDestruction; override;
+         procedure AfterConstruction; override;
+
+         function IsEqual (const i, j: integer): boolean; override;
+         function AddStyleToStore(const i: integer): integer; override;
+         function AtomsCount: integer; override;
+
+       protected
+         function    WriteBegin_TagName: string; override;
+
+         // i is against actual stored XLSX elements, not against TZStyles index
+         procedure   WriteItem(const xml: TZsspXMLWriterH; const i: integer);  override;
+   end;
+
+{ TZXLSXStylesStore }
+function TZXLSXStylesStore.IsEqual (const i, j: integer): boolean;
+begin
+  Result := false; // Нельзя сжимать, пока не изменен процесс записи самих ячеек
+end;
+
+function TZXLSXStylesStore.AddStyle(const i: integer): integer;
+begin
+  Result := AddStyleToStore(i) + XlDelta;
+  // Нельзя сжимать, пока не изменен процесс записи самих ячеек
+end;
+
+function TZXLSXStylesStore.AddStyleToStore(const i: integer): integer;
+var idx: integer;
+begin
+  idx := i + 1; // -1 is Default Style
+
+  if not _stored[idx] then begin
+
+     with _map[idx] do begin
+          Border := Self._bd.AddStyle(i);
+          Fill   := Self._fl.AddStyle(i);
+          Font   := Self._ft.AddStyle(i);
+          Format := Self._nf.AddStyle(i);
+     end;
+
+     _stored[idx] := true;
+  end;
+
+  Result := idx;
+end;
+
+procedure TZXLSXStylesStore.AfterConstruction;
+begin
+  inherited;
+
+   _nf := TZXLSXStyleNumFmt.Create(Self.Styles);
+   _ft := TZXLSXStyleAtomsFont.Create(Self.Styles);
+   _fl := TZXLSXStyleAtomsFills.Create(Self.Styles);
+   _bd := TZXLSXStyleAtomsBorders.Create(Self.Styles);
+
+   SetLength(_map, Self.Styles.Count + 1);
+   SetLength(_stored, Self.Styles.Count + 1);
+
+   FillChar(_stored[0], sizeof(_stored[0]) * Length(_stored), 0);
+   FillChar(_map[0], sizeof(_map[0]) * Length(_map), -1 );
+end;
+
+function TZXLSXStylesStore.AtomsCount: integer;
+begin
+  Result := Length(_map);
+end;
+
+procedure TZXLSXStylesStore.BeforeDestruction;
+begin
+  _nf.Free;
+  _ft.Free;
+  _fl.Free;
+  _bd.Free;
+
+  _map := nil;
+  _stored := nil;
+
+  inherited;
+end;
+
+
+function TZXLSXStylesStore.WriteBegin_TagName: string;
+begin
+  Result := '';
+end;
+
+procedure TZXLSXStylesStore.WriteItem(const xml: TZsspXMLWriterH;
+  const i: integer);
+var
+  //Добавляет <xf> ... </xf>
+    _addalignment: boolean;
+    _style: TZStyle;
+    s: string; j: integer;
+
+  begin
+    xml.Attributes.Clear();
+    _style := Self.Styles[ i - 1 {NumStyle}];
+    _addalignment := _style.Alignment.WrapText or
+                     _style.Alignment.VerticalText or
+                    (_style.Alignment.Rotate <> 0) or
+                    (_style.Alignment.Indent <> 0) or
+                    _style.Alignment.ShrinkToFit or
+                    (_style.Alignment.Vertical <> ZVAutomatic) or
+                    (_style.Alignment.Horizontal <> ZHAutomatic);
+
+    xml.Attributes.Add('applyAlignment', XLSXBoolToStr(_addalignment));
+    xml.Attributes.Add('applyProtection', 'true', false);
+
+    xml.Attributes.Add('applyBorder', 'true', false);
+    xml.Attributes.Add('borderId', IntToStr( _map[i].Border ), false);
+
+    xml.Attributes.Add('fillId', IntToStr( _map[i].Fill), false);
+
+    xml.Attributes.Add('applyFont', 'true', false);
+    xml.Attributes.Add('fontId', IntToStr( _map[i].Font), false);
+
+    // ECMA 376 Ed.4:  12.3.20 Styles Part; 17.9.17 numFmt (Numbering Format); 18.8.30 numFmt (Number Format)
+    // http://social.msdn.microsoft.com/Forums/sa/oxmlsdk/thread/3919af8c-644b-4d56-be65-c5e1402bfcb6
+    xml.Attributes.Add('applyNumberFormat', 'true', false);
+    xml.Attributes.Add('numFmtId', IntToStr(_map[i].Format), false); // TODO: support formats
+
+    if (_isxfId) then
+      xml.Attributes.Add('xfId', '0' { IntToStr(xfId) }, false);
+
+    xml.WriteTagNode('xf', true, true, true);
+
+    if (_addalignment) then
+    begin
+      xml.Attributes.Clear();
+      case (_style.Alignment.Horizontal) of
+        ZHLeft: s := 'left';
+        ZHRight: s := 'right';
+        ZHCenter: s := 'center';
+        ZHFill: s := 'fill';
+        ZHJustify: s := 'justify';
+        ZHDistributed: s := 'distributed';
+        ZHAutomatic:   s := 'general';
+        else
+          s := 'general';
+(*  The standard does not specify a default value for the horizontal attribute.
+        Excel uses a default value of general for this attribute.
+    MS-OI29500: Microsoft Office Implementation Information for ISO/IEC-29500, 18.8.1.d *)
+      end; //case
+      xml.Attributes.Add('horizontal', s);
+      xml.Attributes.Add('indent', IntToStr(_style.Alignment.Indent), false);
+      xml.Attributes.Add('shrinkToFit', XLSXBoolToStr(_style.Alignment.ShrinkToFit), false);
+
+      if _style.Alignment.VerticalText then j := 255
+         else j := ZENormalizeAngle180(_style.Alignment.Rotate);
+      xml.Attributes.Add('textRotation', IntToStr(j), false);
+
+      case (_style.Alignment.Vertical) of
+        ZVCenter: s := 'center';
+        ZVTop: s := 'top';
+        ZVBottom: s := 'bottom';
+        ZVJustify: s := 'justify';
+        ZVDistributed: s := 'distributed';
+        else
+          s := 'bottom';
+(*  The standard does not specify a default value for the vertical attribute.
+        Excel uses a default value of bottom for this attribute.
+    MS-OI29500: Microsoft Office Implementation Information for ISO/IEC-29500, 18.8.1.e *)
+      end; //case
+      xml.Attributes.Add('vertical', s, false);
+      xml.Attributes.Add('wrapText', XLSXBoolToStr(_style.Alignment.WrapText), false);
+      xml.WriteEmptyTag('alignment', true);
+    end; //if (_addalignment)
+
+    xml.Attributes.Clear();
+    xml.Attributes.Add('hidden', XLSXBoolToStr(_style.Protect));
+    xml.Attributes.Add('locked', XLSXBoolToStr(_style.HideFormula));
+    xml.WriteEmptyTag('protection', true);
+
+    xml.WriteEndTagNode(); //xf
+
+end;   //_WriteXF
+
+procedure TZXLSXStylesStore.WriteTo(const xml: TZsspXMLWriterH);
+  //<cellStyleXfs> ... </cellStyleXfs> / <cellXfs> ... </cellXfs>
+  procedure WriteCellStyleXfs(const TagName: string; isxfId: boolean);
+  var
+    i: integer;
+
+  begin
+    Self._isXfId := isxfId;
+
+    xml.Attributes.Clear();
+    xml.Attributes.Add('count', IntToStr(AtomsCount));
+    xml.WriteTagNode(TagName, true, true, true);
+    for i := 0 to AtomsCount do
+    begin
+//      //Что-то не совсем понятно, какой именно xfId нужно ставить. Пока будет 0 для всех.
+//      _WriteXF(i, isxfId, 0{i + 1});
+      WriteItem(xml, i);
+    end;
+    xml.WriteEndTagNode(); //cellStyleXfs
+  end; //WriteCellStyleXfs
+begin
+  xml.Attributes.Clear();
+  xml.Attributes.Add('xmlns', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+  xml.WriteTagNode('styleSheet', true, true, true);
+  try
+
+    _nf.WriteTo(xml); // Number Formats
+    _ft.WriteTo(xml); // Fonts
+    _fl.WriteTo(xml); // Fills
+    _bd.WriteTo(xml); // Borders
+
+    //Libre/Open Office needs cellStyleXfs for reading background colors!
+    WriteCellStyleXfs('cellStyleXfs', false);
+    WriteCellStyleXfs('cellXfs', true);
+
+  finally
+    xml.WriteEndTagNode(); //styleSheet
+  end;
+end;
 
 
 //Создаёт styles.xml
@@ -4034,6 +4944,41 @@ type
 //    BOM: ansistring                   - BOM
 //RETURN
 //      integer
+function ZEXLSXCreateStyles(var XMLSS: TZEXMLSS; Stream: TStream; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
+var
+  _xml: TZsspXMLWriterH;        // писатель
+  _styles: TZXLSXStylesStore;   // хранитель-создаватель
+  i: integer;
+begin
+  result := 2;
+  _xml := ZEXLSXNewXmlWithHeader(Stream, CodePageName, BOM, TextConverter);
+  if nil = _xml then exit;
+
+  Result := 0;
+  _styles := nil;
+  try
+    _styles := TZXLSXStylesStore.Create(XMLSS.Styles);
+
+//    _xml.Attributes.Clear();
+//    _xml.Attributes.Add('xmlns', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+//    _xml.WriteTagNode('styleSheet', true, true, true);
+//    try
+
+      for i := - 1 to XMLSS.Styles.Count - 1 do
+          _styles.AddStyle(i);
+
+      _styles.WriteTo(_xml);
+
+//    finally
+//      _xml.WriteEndTagNode(); //styleSheet
+//    end;
+  finally
+    _xml.Free;
+    _styles.Free;
+  end;
+end;
+
+{$IfDef __old_create_style} // commenting out!
 function ZEXLSXCreateStyles(var XMLSS: TZEXMLSS; Stream: TStream; TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer; deprecated; // number format ?
 var
   _xml: TZsspXMLWriterH;        //писатель
@@ -4600,8 +5545,8 @@ begin
     WriteXLSXFonts();
     WriteXLSXFills();
     WriteXLSXBorders();
-//    WriteCellStyleXfs('cellStyleXfs', false);
-//    WriteCellStyleXfs('cellXfs', true);
+    WriteCellStyleXfs('cellStyleXfs', false);
+    WriteCellStyleXfs('cellXfs', true);
 
     // experiment: do not need styles, ergo do not need fake xfId
     //Result: experiment failed!
@@ -4610,7 +5555,7 @@ begin
     //WriteCellStyleXfs('cellXfs', false);
     // experiment end
 
-    WriteCellStyles(); //??
+//    WriteCellStyles(); //??
 
     _xml.WriteEndTagNode(); //styleSheet
   finally
@@ -4624,6 +5569,8 @@ begin
     _BorderIndex := nil;
   end;
 end; //ZEXLSXCreateStyles
+
+{$EndIf}
 
 //Добавить Relationship для rels
 //INPUT
@@ -5423,5 +6370,6 @@ end;
 {$I xlsxzipfuncimpl.inc}
 {$ENDIF}
 
-
 end.
+
+
