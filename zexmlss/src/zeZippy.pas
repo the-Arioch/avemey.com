@@ -110,6 +110,12 @@ TStringList = class;
 
 implementation uses TypInfo, Contnrs;
 
+resourcestring
+//   EZxCannotOverwriteZip = 'Cannot remove outdated file %s';
+   EZxCannotOverwriteZip = 'Невозможно удалить старый файл %s';
+//   EZxWrongZipState      = 'Zip generator state is %s while %s is required for further processing.';
+   EZxWrongZipState      = 'Сжатие Zip: текущий режим "%s", а для продолжения работы нужен режим "%s".';
+
 { TZxZipGen }
 
 procedure TZxZipGen.AfterConstruction;
@@ -237,8 +243,7 @@ procedure TZxZipGen.RequireState(const st: TZxZipGenState);
   end;
 begin
   if State <> st then
-     raise EZxZipGen.CreateFmt(
-       'Zip generator state is %s while %s is required for further processing.',
+     raise EZxZipGen.CreateFmt( EZxWrongZipState,
        [ Name(State), Name(st) ]);
 end;
 
@@ -250,6 +255,15 @@ end;
 
 constructor TZxZipGen.Create(const ZipFile: TFileName);
 begin
+   // Try deleting old files to not confusing zippers
+   //   *  would fail on folders for non-packed fake-zip
+   //   *  FileExists is not always reliable
+   //   *  more reliable would be create-temp/remove old/rename sequence,
+   //           but then implementing zippers' would become much more complex
+   if FileExists(ZipFile) then
+      if not SysUtils.DeleteFile(ZipFile) then // not Windows.DeleteFile
+         raise EZxZipGen.CreateFmt(EZxCannotOverwriteZip, [ZipFile]);
+
    inherited Create;
    FFileName := ZipFile;
 end;
