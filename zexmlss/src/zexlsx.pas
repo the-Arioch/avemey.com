@@ -3958,7 +3958,7 @@ begin
     _xml.Attributes.Add('showHorizontalScroll', 'true', false);
     _xml.Attributes.Add('showSheetTabs', 'true', false);
     _xml.Attributes.Add('showVerticalScroll', 'true', false);
-    _xml.Attributes.Add('tabRatio', '200', false);
+    _xml.Attributes.Add('tabRatio', '300', false); // with long titles 200 causes an ugly overlap
     _xml.Attributes.Add('windowHeight', '8192', false);
     _xml.Attributes.Add('windowWidth', '16384', false);
     _xml.Attributes.Add('xWindow', '0', false);
