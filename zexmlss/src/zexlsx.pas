@@ -4078,7 +4078,13 @@ begin
     Result := AtomsReMap[idx];
     if Result >= 0 then exit; // already added
 
-    for j := 0 to i do begin
+    // Now we'd see if the style element (or the equal one) already was registered earlier.
+    //   note #1: Since we want to support random addition order (during Cells exporting),
+    //            not only -1 .. Styles.Count linear dump, we must iterate the whole remap
+    //            array, not "just For j := 0 to i do"
+    //   note #2: Since above we checked that #i (or [idx]) element wasn't registered yet (<0)
+    //            we don't have to check for self ( j <> idx ), that's for granted.
+    for j := Low(AtomsReMap) to High(AtomsReMap) do begin
         Result := AtomsReMap[j];
         if Result >= 0 then begin // something was stored there
            if Self.IsEqual(i, j - 1) then begin
