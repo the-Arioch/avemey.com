@@ -28,6 +28,7 @@ type TZxZipMastered = class (TZxZipGen)
 
 
 implementation
+uses ZMMsg; // DS_NoInFile error code
 
 { TZxZipMastered }
 
@@ -46,7 +47,8 @@ begin
   FZM.WriteOptions := [zwoForceDest];
   FZM.ZipFileName := Self.ZipFileName;
 
-  if 0 <> FZM.ErrCode
+  // DS_NoInFile = 123 - means creating new file... Weird.
+  if (DS_NoInFile <> FZM.ErrCode) and (0 <> FZM.ErrCode)
      then raise EZxZipGen.Create(FZM.ErrMessage);
 end;
 
@@ -60,7 +62,6 @@ end;
 
 function TZxZipMastered.DoSealStream(const Data: TStream; const RelName: TFileName): boolean;
 begin
-//  FZM.AddStreamToStream(Data as TMemoryStream);
   FZM.ZipStream.LoadFromStream(Data);
   FZM.AddStreamToFile(RelName,0,0);
 
