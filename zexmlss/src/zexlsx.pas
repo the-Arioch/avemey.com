@@ -164,7 +164,29 @@ type
 
   TZEXLSXFontArray = array of TZEXLSXFont; //массив шрифтов
 
+// hex number, ARGB format, Alpha = 255 for opaque colors
+function ColorToXLSX(Color: TColor): string;
+var
+  _RGB: integer;
+begin
+  _RGB := ColorToRGB(Color) or $ff000000;
+  Result := IntToHex(_RGB, 8);
+end;
+
+// VCL Color does not have transparency, so ignoring alpha channel
+//    To think: extra parameter "background color" and blend ?
+//    Could help for certain cells, but would not help for styles.
+function ColorFromXLSX(S: string): TColor;
+begin
+  Result := 0;
+  if S > '' then begin
+     if S[1] = '#' then Delete(S, 1, 1);
+     Result := StrToIntDef('$'+S, 0) and $00ffFFff;
+  end;
+end;
+
 {$IFDEF FPC}
+type
   //Для распаковки в поток
 
   { TXSLXZipHelper }
@@ -4434,7 +4456,7 @@ begin
         _tmpColor := Sty.PatternColor
       else
         _tmpColor := Sty.BGColor;
-      xml.Attributes.Add('rgb', '00' + ColorToHTMLHex(_tmpColor));
+      xml.Attributes.Add('rgb', ColorToXLSX(_tmpColor));
       xml.WriteEmptyTag('fgColor', true);
     end;
 
@@ -4445,7 +4467,7 @@ begin
         _tmpColor := Sty.BGColor
       else
         _tmpColor := Sty.PatternColor;
-      xml.Attributes.Add('rgb', '00' + ColorToHTMLHex(_tmpColor));
+      xml.Attributes.Add('rgb', ColorToXLSX(_tmpColor));
       xml.WriteEmptyTag('bgColor', true);
     end;
 
@@ -4566,7 +4588,7 @@ var brd: TZBorder;
     begin
       xml.WriteTagNode(s, true, true, true);
       xml.Attributes.Clear();
-      xml.Attributes.Add('rgb', '00' + ColorToHTMLHex(_border.Color));
+      xml.Attributes.Add('rgb', ColorToXLSX(_border.Color));
       xml.WriteEmptyTag('color', true);
       xml.WriteEndTagNode();
     end else
@@ -4695,10 +4717,11 @@ begin
     xml.Attributes.Add('val', IntToStr(fnt.Size));
     xml.WriteEmptyTag('sz', true);
 
+    // rgb (Alpha Red Green Blue Color Value)  - from OfficeXML specs
     if (fnt.Color <> clWindowText) then
     begin
       xml.Attributes.Clear();
-      xml.Attributes.Add('rgb', '00' + ColorToHTMLHex(fnt.Color));
+      xml.Attributes.Add('rgb', ColorToXLSX(fnt.Color)); // Opaque color: Alpha = 255
       xml.WriteEmptyTag('color', true);
     end;
 
@@ -5122,7 +5145,7 @@ var
       if (fnt.Color <> clWindowText) then
       begin
         _xml.Attributes.Clear();
-        _xml.Attributes.Add('rgb', '00' + ColorToHTMLHex(fnt.Color));
+        _xml.Attributes.Add('rgb', ColorToXLSX(fnt.Color));
         _xml.WriteEmptyTag('color', true);
       end;
 
@@ -5266,7 +5289,7 @@ var
           _tmpColor := XMLSS.Styles[i].PatternColor
         else
           _tmpColor := XMLSS.Styles[i].BGColor;
-        _xml.Attributes.Add('rgb', '00' + ColorToHTMLHex(_tmpColor));
+        _xml.Attributes.Add('rgb', ColorToXLSX(_tmpColor));
         _xml.WriteEmptyTag('fgColor', true);
       end;
 
@@ -5277,7 +5300,7 @@ var
           _tmpColor := XMLSS.Styles[i].BGColor
         else
           _tmpColor := XMLSS.Styles[i].PatternColor;
-        _xml.Attributes.Add('rgb', '00' + ColorToHTMLHex(_tmpColor));
+        _xml.Attributes.Add('rgb', ColorToXLSX(_tmpColor));
         _xml.WriteEmptyTag('bgColor', true);
       end;
 
@@ -5378,7 +5401,7 @@ var
     begin
       _xml.WriteTagNode(s, true, true, true);
       _xml.Attributes.Clear();
-      _xml.Attributes.Add('rgb', '00' + ColorToHTMLHex(_border.Color));
+      _xml.Attributes.Add('rgb', ColorToXLSX(_border.Color));
       _xml.WriteEmptyTag('color', true);
       _xml.WriteEndTagNode();
     end else
