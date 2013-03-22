@@ -24,3 +24,5 @@
 *.obj
 *.dbg
 *.pas.bak
+zexmlss/packages/lazarus/lib/i386-win32/zesavecommon.rst
+zexmlss/packages/lazarus/lib/x86_64-win64/zesavecommon.rst
