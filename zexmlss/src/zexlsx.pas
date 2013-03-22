@@ -4745,8 +4745,7 @@ begin
   end;
 end;
 
-
-
+// Umbrella style class - the class that links to and combines them all like XLSX:styles.xml
 type
    TZXLSXStylesAtomsIndices = record
       Font, Fill, Border, Format: integer;
@@ -4825,8 +4824,8 @@ begin
    _fl := TZXLSXStyleAtomsFills.Create(Self.Styles);
    _bd := TZXLSXStyleAtomsBorders.Create(Self.Styles);
 
-   SetLength(_map, Self.Styles.Count + 1);
-   SetLength(_stored, Self.Styles.Count + 1);
+   SetLength(_map, Self.Styles.Count + 1);  // +1 for Default style
+   SetLength(_stored, Self.Styles.Count + 1);  // +1 for Default style
 
    FillChar(_stored[0], sizeof(_stored[0]) * Length(_stored), 0);
    FillChar(_map[0], sizeof(_map[0]) * Length(_map), -1 );
@@ -4853,7 +4852,7 @@ end;
 
 function TZXLSXStylesStore.WriteBegin_TagName: string;
 begin
-  Result := '';
+  Result := ''; // two tags, not one !
 end;
 
 procedure TZXLSXStylesStore.WriteItem(const xml: TZsspXMLWriterH;
@@ -4959,7 +4958,7 @@ procedure TZXLSXStylesStore.WriteTo(const xml: TZsspXMLWriterH);
     xml.Attributes.Clear();
     xml.Attributes.Add('count', IntToStr(AtomsCount));
     xml.WriteTagNode(TagName, true, true, true);
-    for i := 0 to AtomsCount do
+    for i := 0 to AtomsCount - 1 do
     begin
 //      //Что-то не совсем понятно, какой именно xfId нужно ставить. Пока будет 0 для всех.
 //      _WriteXF(i, isxfId, 0{i + 1});
