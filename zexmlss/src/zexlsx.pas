@@ -4645,33 +4645,19 @@ begin
   Result := 'fonts';
 end;
 
+(* MS-OI29500: Microsoft Office Implementation Information for ISO/IEC-29500 Standard Compliance]
+18.8.22. font (Font)
+(a)  The standard defines the child elements using a choice.
+ Excel requires the child elements to be in the following sequence:
+  i, strike, condense, extend, outline, shadow, u, vertAlign, sz, color, name, family, charset, scheme.*)
 procedure TZXLSXStyleAtomsFont.WriteItem(const xml: TZsspXMLWriterH;
   const i: integer);
 var fnt: TFont;
 begin
-   fnt := TFont( AtomsStore[i] );
-
-    xml.Attributes.Clear();
-    xml.WriteTagNode('font', true, true, true);
-
-    xml.Attributes.Clear();
-    xml.Attributes.Add('val', fnt.Name);
-    xml.WriteEmptyTag('name', true);
-
-    xml.Attributes.Clear();
-    xml.Attributes.Add('val', IntToStr(fnt.Charset));
-    xml.WriteEmptyTag('charset', true);
-
-    xml.Attributes.Clear();
-    xml.Attributes.Add('val', IntToStr(fnt.Size));
-    xml.WriteEmptyTag('sz', true);
-
-    if (fnt.Color <> clWindowText) then
-    begin
-      xml.Attributes.Clear();
-      xml.Attributes.Add('rgb', '00' + ColorToHTMLHex(fnt.Color));
-      xml.WriteEmptyTag('color', true);
-    end;
+  fnt := TFont( AtomsStore[i] );
+  xml.Attributes.Clear();
+  xml.WriteTagNode('font', true, true, true);
+  try
 
     if (fsBold in fnt.Style) then
     begin
@@ -4694,6 +4680,8 @@ begin
       xml.WriteEmptyTag('strike', true);
     end;
 
+    // Here may be inserted:   condense, extend, outline, shadow
+
     if (fsUnderline in fnt.Style) then
     begin
       xml.Attributes.Clear();
@@ -4701,7 +4689,37 @@ begin
       xml.WriteEmptyTag('u', true);
     end;
 
+    // Here may be inserted:   vertAlign
+
+    xml.Attributes.Clear();
+    xml.Attributes.Add('val', IntToStr(fnt.Size));
+    xml.WriteEmptyTag('sz', true);
+
+    if (fnt.Color <> clWindowText) then
+    begin
+      xml.Attributes.Clear();
+      xml.Attributes.Add('rgb', '00' + ColorToHTMLHex(fnt.Color));
+      xml.WriteEmptyTag('color', true);
+    end;
+
+    xml.Attributes.Clear();
+    xml.Attributes.Add('val', fnt.Name);
+    xml.WriteEmptyTag('name', true);
+
+    // Here may be inserted:   family, charset, scheme.
+
+    if fnt.Charset <> 1 {(DEFAULT_CHARSET} then
+    begin
+      xml.Attributes.Clear();
+      xml.Attributes.Add('val', IntToStr(fnt.Charset));
+      xml.WriteEmptyTag('charset', true);
+    end;
+
+    // Here may be inserted:   scheme.
+
+  finally
     xml.WriteEndTagNode(); //font
+  end;
 end;
 
 
