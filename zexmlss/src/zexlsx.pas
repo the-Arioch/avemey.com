@@ -60,7 +60,7 @@ uses
   ,LCLType,
   LResources
   {$ENDIF}
-  {$IFDEF FPC},zipper{$ELSE}{$I xlsxzipuses.inc}{$ENDIF};
+  {$IFDEF FPC},zipper{$ELSE}{.$I xlsxzipuses.inc}{$ENDIF};
 
 type
   TZXLSXFileItem = record
@@ -100,7 +100,7 @@ function SaveXmlssToXLSX(var XMLSS: TZEXMLSS; FileName: string; const SheetsNumb
 {$ENDIF}
 
 {$IFNDEF FPC}
-{$I xlsxzipfunc.inc}
+{.$I xlsxzipfunc.inc}
 {$ENDIF}
 
 function ExportXmlssToXLSX(var XMLSS: TZEXMLSS; PathName: string; const SheetsNumbers: array of integer;
@@ -4870,7 +4870,7 @@ var
                      _style.Alignment.VerticalText or
                     (_style.Alignment.Rotate <> 0) or
                     (_style.Alignment.Indent <> 0) or
-                    _style.Alignment.ShrinkToFit or
+                     _style.Alignment.ShrinkToFit or
                     (_style.Alignment.Vertical <> ZVAutomatic) or
                     (_style.Alignment.Horizontal <> ZHAutomatic);
 
@@ -4894,56 +4894,57 @@ var
       xml.Attributes.Add('xfId', '0' { IntToStr(xfId) }, false);
 
     xml.WriteTagNode('xf', true, true, true);
+    try
 
-    if (_addalignment) then
-    begin
+      if (_addalignment) then
+      begin
+        xml.Attributes.Clear();
+        case (_style.Alignment.Horizontal) of
+          ZHLeft: s := 'left';
+          ZHRight: s := 'right';
+          ZHCenter: s := 'center';
+          ZHFill: s := 'fill';
+          ZHJustify: s := 'justify';
+          ZHDistributed: s := 'distributed';
+          ZHAutomatic:   s := 'general';
+          else
+            s := 'general';
+  (*  The standard does not specify a default value for the horizontal attribute.
+          Excel uses a default value of general for this attribute.
+      MS-OI29500: Microsoft Office Implementation Information for ISO/IEC-29500, 18.8.1.d *)
+        end; //case
+        xml.Attributes.Add('horizontal', s);
+        xml.Attributes.Add('indent', IntToStr(_style.Alignment.Indent), false);
+        xml.Attributes.Add('shrinkToFit', XLSXBoolToStr(_style.Alignment.ShrinkToFit), false);
+
+        if _style.Alignment.VerticalText then j := 255
+           else j := ZENormalizeAngle180(_style.Alignment.Rotate);
+        xml.Attributes.Add('textRotation', IntToStr(j), false);
+
+        case (_style.Alignment.Vertical) of
+          ZVCenter: s := 'center';
+          ZVTop: s := 'top';
+          ZVBottom: s := 'bottom';
+          ZVJustify: s := 'justify';
+          ZVDistributed: s := 'distributed';
+          else
+            s := 'bottom';
+  (*  The standard does not specify a default value for the vertical attribute.
+          Excel uses a default value of bottom for this attribute.
+      MS-OI29500: Microsoft Office Implementation Information for ISO/IEC-29500, 18.8.1.e *)
+        end; //case
+        xml.Attributes.Add('vertical', s, false);
+        xml.Attributes.Add('wrapText', XLSXBoolToStr(_style.Alignment.WrapText), false);
+        xml.WriteEmptyTag('alignment', true);
+      end; //if (_addalignment)
+
       xml.Attributes.Clear();
-      case (_style.Alignment.Horizontal) of
-        ZHLeft: s := 'left';
-        ZHRight: s := 'right';
-        ZHCenter: s := 'center';
-        ZHFill: s := 'fill';
-        ZHJustify: s := 'justify';
-        ZHDistributed: s := 'distributed';
-        ZHAutomatic:   s := 'general';
-        else
-          s := 'general';
-(*  The standard does not specify a default value for the horizontal attribute.
-        Excel uses a default value of general for this attribute.
-    MS-OI29500: Microsoft Office Implementation Information for ISO/IEC-29500, 18.8.1.d *)
-      end; //case
-      xml.Attributes.Add('horizontal', s);
-      xml.Attributes.Add('indent', IntToStr(_style.Alignment.Indent), false);
-      xml.Attributes.Add('shrinkToFit', XLSXBoolToStr(_style.Alignment.ShrinkToFit), false);
-
-      if _style.Alignment.VerticalText then j := 255
-         else j := ZENormalizeAngle180(_style.Alignment.Rotate);
-      xml.Attributes.Add('textRotation', IntToStr(j), false);
-
-      case (_style.Alignment.Vertical) of
-        ZVCenter: s := 'center';
-        ZVTop: s := 'top';
-        ZVBottom: s := 'bottom';
-        ZVJustify: s := 'justify';
-        ZVDistributed: s := 'distributed';
-        else
-          s := 'bottom';
-(*  The standard does not specify a default value for the vertical attribute.
-        Excel uses a default value of bottom for this attribute.
-    MS-OI29500: Microsoft Office Implementation Information for ISO/IEC-29500, 18.8.1.e *)
-      end; //case
-      xml.Attributes.Add('vertical', s, false);
-      xml.Attributes.Add('wrapText', XLSXBoolToStr(_style.Alignment.WrapText), false);
-      xml.WriteEmptyTag('alignment', true);
-    end; //if (_addalignment)
-
-    xml.Attributes.Clear();
-    xml.Attributes.Add('hidden', XLSXBoolToStr(_style.Protect));
-    xml.Attributes.Add('locked', XLSXBoolToStr(_style.HideFormula));
-    xml.WriteEmptyTag('protection', true);
-
-    xml.WriteEndTagNode(); //xf
-
+      xml.Attributes.Add('hidden', XLSXBoolToStr(_style.Protect));
+      xml.Attributes.Add('locked', XLSXBoolToStr(_style.HideFormula));
+      xml.WriteEmptyTag('protection', true);
+    finally
+      xml.WriteEndTagNode(); //xf
+    end;
 end;   //_WriteXF
 
 procedure TZXLSXStylesStore.WriteTo(const xml: TZsspXMLWriterH);
@@ -6419,7 +6420,7 @@ end;
 {$ENDIF}
 
 {$IFNDEF FPC}
-{$I xlsxzipfuncimpl.inc}
+{.$I xlsxzipfuncimpl.inc}
 {$ENDIF}
 
 end.

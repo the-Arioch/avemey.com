@@ -78,7 +78,7 @@ function ZENormalizeAngle180(const value: TZCellTextRotate): integer;
 // single place to update version et all
 function ZELibraryName: string;
 const ZELibraryVersion = '0.0.6';
-      ZELibraryFork = '';//'Arioch';  // or empty str   // URL ?
+      ZELibraryFork = 'Arioch';// or empty str   // URL ?
 implementation
 
 function ZELibraryName: string;
@@ -92,7 +92,7 @@ begin   // todo: compiler version and date ?
     {$ELSE}
     'DELPHI_or_CBUILDER';
     {$ENDIF}
-  Result := Result + ' ZEXMLSS/' + {$I git_hash.inc};
+//  Result := Result + ' ZEXMLSS/' + {$I git_hash.inc};
 end;
 
 // despite formal angle datatype declaration in default "range check off" mode
@@ -395,6 +395,11 @@ end;
 resourcestring
   DefaultSheetName = 'Sheet';
 
+const
+  MaxTitleLength = 31;
+// http://stackoverflow.com/questions/3681868/is-there-a-limit-on-an-excel-worksheets-name-length
+// Excel goes nuts if sheet title exceeds 31 chars.
+
 //делает уникальную строку, добавляя к строке '(num)'
 //топорно, но работает
 //INPUT
@@ -449,7 +454,13 @@ begin
   _kol := High(mas);
   while (num < _kol) do
   begin
-    s := UpperCase(mas[num]);
+    s := mas[num];
+    if Length(s) > MaxTitleLength then begin
+       SetLength(s, MaxTitleLength);
+       mas[num] := s;
+    end;
+    s := UpperCase(s);
+
     k := 0;
     for i := num + 1 to _kol do
     begin
