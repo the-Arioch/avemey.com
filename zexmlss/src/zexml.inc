@@ -2,7 +2,7 @@
 {$T-}
 
 // Если не используется ZColorStringGrid 
-{ $DEFINE NOZCOLORSTRINGGRID}
+{$DEFINE NOZCOLORSTRINGGRID}
 
 // Free Pascal / Lazarus
 {$IFDEF FPC}
