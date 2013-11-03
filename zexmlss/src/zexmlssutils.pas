@@ -1976,7 +1976,7 @@ var
   var
     s: string;
     i: integer;
-
+    fs: TFontStyles;
   begin
     if IDStyle <> -1 then
         XMLSS.Styles[IDStyle].Assign(XMLSS.Styles[-1]);
@@ -2006,14 +2006,18 @@ var
           s := _xml.Attributes.ItemsByName['x:CharSet'];
           if length(s) > 0 then
             font.Charset := _StrToInt(s);
+          FS := [];
+          if ZEStrToBoolean(_xml.Attributes.ItemsByName['ss:Italic']) then
+            Include(FS, fsItalic);
           if ZEStrToBoolean(_xml.Attributes.ItemsByName['ss:Bold']) then
-            font.Style := font.Style + [fsBold];
+            Include(FS, fsBold);
           if ZEStrToBoolean(_xml.Attributes.ItemsByName['ss:StrikeThrough']) then
-            font.Style := font.Style + [fsStrikeout];
+            Include(FS, fsStrikeout);
           s := _xml.Attributes.ItemsByName['ss:Underline'];
           if length(s) > 0 then
             if UpperCase(s) <> 'NONE' then
-              font.Style := font.Style + [fsUnderline];
+               Include(FS, fsUnderline);
+          font.Style := FS;
           s := _xml.Attributes.ItemsByName['ss:Size'];
           if length(s) > 0 then
             font.Size := _StrToInt(s);
