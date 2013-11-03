@@ -954,7 +954,6 @@ end;
 function ColorToHTMLHex(Color: TColor): string;
 var
   _RGB: integer;
-
 begin
   _RGB := ColorToRGB(Color);
   //result := IntToHex(GetRValue(_RGB), 2) + IntToHex(GetGValue(_RGB), 2) + IntToHex(GetBValue(_RGB), 2);

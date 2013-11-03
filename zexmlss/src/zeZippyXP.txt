@@ -1,0 +1,14 @@
+Windows XP+ has COM-server ZipFldr.dll
+
+It can be used if to open ZIP by means of OLE/COM as a folder
+
+To create Zip one has to dump empty zip stub
+
+Articles on topic:
+
+http://purefractalsolutions.com/show.php?a=src/zipfldr
+
+http://social.msdn.microsoft.com/Forums/en-US/windowsgeneraldevelopmentissues/thread/d3e347cc-f4dc-44a6-8f84-977f958d89c6/
+
+http://www.rondebruin.nl/windowsxpzip.htm
+http://www.rondebruin.nl/windowsxpunzip.htm
