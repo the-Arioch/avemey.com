@@ -674,9 +674,9 @@ implementation
 procedure CorrectStrForXML(const St: string; var Corrected: string; var UseXMLNS: boolean);
 type
   StackData = record
-    TextBeforeTag: string;
-    TagName: string;
+    TagName: string; // for debugger's Watches - 1st element
     RawTag: string;
+    TextBeforeTag: string;
     isBad: boolean;
     isClose: boolean;
   end;
@@ -689,7 +689,7 @@ var
   //проверка тэга
   procedure _CheckTag(var _num: integer; const _s: string; var D: StackData);
   var
-    i, l, f, t: integer;
+    i, l, f: integer;
     s: string;
     _param: string;
     _Start: boolean;
@@ -859,7 +859,7 @@ begin
   Corrected := '';
   UseXMLNS := false;
   _length := length(St);
-  t := 0;
+//  t := 0;
   i := 0;
   while i < _length do
   begin
@@ -879,21 +879,22 @@ begin
              _BadTag(s, Stack[kol])
            else
            begin
-             inc(t);
+//             inc(t);
              if Stack[kol].isClose then
              begin
                if kol > 0 then
                begin
                  if Stack[kol].TagName = Stack[kol-1].TagName then
                  begin
-                   dec(t);
-                   if t <> 1 then
+//                   dec(t);
+//                   if t <> 1 then
                      Corrected := Stack[kol-1].TextBeforeTag + Stack[kol-1].RawTag + Corrected +
                                   Stack[kol].TextBeforeTag + Stack[kol].RawTag
-                   else
-                     Corrected :=Corrected + Stack[kol-1].TextBeforeTag + Stack[kol-1].RawTag +
-                                  Stack[kol].TextBeforeTag + Stack[kol].RawTag;
-                   dec(t);
+                     ;
+//                   else
+//                     Corrected := Corrected + Stack[kol-1].TextBeforeTag + Stack[kol-1].RawTag +
+//                                  Stack[kol].TextBeforeTag + Stack[kol].RawTag;
+//                   dec(t);
                    UseXMLNS := true;
                    dec(kol);
                    SetLength(Stack, kol);
@@ -901,8 +902,11 @@ begin
                   _BadTag(s, Stack[kol]);
                end else
                  _BadTag(s, Stack[kol]);
-             end else
+             end else begin
+               Stack[kol].TextBeforeTag := Corrected + Stack[kol].TextBeforeTag;
+               Corrected := ''; // новый уровень вложенности - начинаем с чистого листа
                inc(kol);
+             end;
            end;
          end;
       '>': s := s + '&gt;';
@@ -938,7 +942,7 @@ begin
     end;
   end;
 
-  for i := 0 to kol - 1 do
+  for i := 0 to kol - 1 do  // WTF? Stack unrolling should go reverse-order!
     Corrected := Corrected + Stack[i].TextBeforeTag + CheckStrEntity(Stack[i].RawTag);
 
   Corrected := Corrected + s;
