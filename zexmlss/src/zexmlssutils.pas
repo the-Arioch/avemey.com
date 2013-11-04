@@ -1306,19 +1306,23 @@ var
       Attributes.Clear();
       //=====aligment======
       // Horizontal / Vertical
-      if _def then
-      begin
+//      if _def then
+//      begin
         if (_style.Alignment.Horizontal <> ZHAutomatic) then
           Attributes.Add('ss:Horizontal', HAlToStr(_Style.Alignment.Horizontal), false);
         if (_style.Alignment.Vertical <> ZVAutomatic) then
           Attributes.Add('ss:Vertical', VAlToStr(_Style.Alignment.Vertical), false);
-      end else
-      begin
-        if _style.Alignment.Horizontal <> XMLSS.Styles.DefaultStyle.Alignment.Horizontal then
-          Attributes.Add('ss:Horizontal', HAlToStr(_Style.Alignment.Horizontal), false);
-        if _style.Alignment.Vertical <> XMLSS.Styles.DefaultStyle.Alignment.Vertical then
-          Attributes.Add('ss:Vertical', VAlToStr(_Style.Alignment.Vertical), false);
-      end;
+//      end else
+//      begin
+//        if _style.Alignment.Horizontal <> XMLSS.Styles.DefaultStyle.Alignment.Horizontal then
+//          Attributes.Add('ss:Horizontal', HAlToStr(_Style.Alignment.Horizontal), false);
+//        if _style.Alignment.Vertical <> XMLSS.Styles.DefaultStyle.Alignment.Vertical then
+//          Attributes.Add('ss:Vertical', VAlToStr(_Style.Alignment.Vertical), false);
+//      end;
+//      1. Particular values should be compared to XML default, not some different style
+//      2. If comparing to some other style (like "Default") - the whole tag should be compared,
+//         not every option on its own
+//      3. This style inheritance may be implemented on tag level - but that is a separate issue
 
       // Indent
       AddAttribute('ss:Indent', _style.Alignment.Indent, 0, XMLSS.Styles.DefaultStyle.Alignment.Indent, _def);
