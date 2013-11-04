@@ -723,13 +723,13 @@ var
         case _s[i] of
           '>':
              begin
-               if (length(_zz) > 0) or (_param <> '') then
+               if (_zz > '') or (_param <> '') then
                  D.isBad := true;
-               if length(s) > 0 then
+               if s > '' then
                begin
                  if not _start then
                  begin
-                   if length(s) > 0 then
+                   if s > '' then
                      D.TagName := s;
                      D.RawTag := D.RawTag + s;
                  end else
@@ -739,7 +739,7 @@ var
              end;
           '"', '''':
              begin
-               if length(_zz) = 0 then
+               if _zz = '' then
                begin
                  D.isBad := true;
                end else
@@ -748,7 +748,7 @@ var
                  if _zz[t] = '=' then
                  begin
                    _zz := _zz + _s[i];
-                   if length(s) > 0 then
+                   if s > '' then
                      D.isBad := true;
                    D.RawTag := D.RawTag + _s[i];
                    s := '';
@@ -765,7 +765,7 @@ var
               begin
                 if not _Start then
                 begin
-                  if length(s) > 0 then
+                  if s > '' then
                   begin
                     _Start := true;
                     D.RawTag := D.RawTag + s +_s[i];
@@ -775,16 +775,16 @@ var
                     D.isBad := true;
                 end else
                 begin
-                  if length(s) <> 0 then
+                  if s <> '' then
                   begin
-                    if length(_param) = 0 then
+                    if _param = '' then
                     begin
                       _param := s;
                       D.RawTag := D.RawTag + s;
                       s := '';
                     end else
                     begin
-                      if length(_zz) = 0 then
+                      if _zz = '' then
                         D.isBad := true;
                     end;
                   end;
@@ -810,7 +810,7 @@ var
                if not _Start then
                begin
                  D.RawTag := D.RawTag + '/';
-                 if length(s) = 0 then
+                 if s = '' then
                  begin
                    D.isClose := true;
                  end else
@@ -824,11 +824,11 @@ var
              end;
           '=':
              begin
-               if length(_zz) > 0 then
+               if _zz > '' then
                  D.isBad := true
                else
                begin
-                  if (length(s) > 0) and (length(_param) > 0) then
+                  if (s > '') and (_param > '') then
                     D.isBad := true;
                  _zz := '=';
                  D.RawTag := D.RawTag + s + '=';
@@ -970,7 +970,7 @@ var
 
 begin
   result := 0;
-  if length(value) > 0 then
+  if value > '' then
   begin
     value := UpperCase(value);
     FillChar(a, sizeof(a), 0);

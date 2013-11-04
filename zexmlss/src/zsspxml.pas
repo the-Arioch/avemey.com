@@ -531,7 +531,7 @@ begin
     ReadCPChar(s, _eof);
     text := text + s;
     if _eof then exit;
-    if length(s) > 0 then
+    if s > '' then
     begin
       t := ord(s[1]);
       if t > 127 then
@@ -2240,7 +2240,7 @@ end;
 function TZsspXMLWriter.GetTabSymbol(): ansichar;
 begin
   result := #0;
-  if length(FTabSymbol) >= 1 then
+  if ( FTabSymbol > '' ) then
     result := FTabSymbol[1];
 end;
 
@@ -2787,7 +2787,7 @@ var
     begin
       _get_char();
       if err then break;
-      if length(ss) >= 1 then
+      if ( ss > '' ) then
       begin
         RawTag();
         case ss[1] of
@@ -2796,7 +2796,7 @@ var
               if count_quote = 1 then
                 result := result + ss[1]
               else
-                if length(result) > 0 then
+                if result > '' then
                 begin
                   FErrorCode := FErrorCode or 1;
                   break;
@@ -2808,7 +2808,7 @@ var
                 result := result + ss[1]  //tut
               else
               begin
-                if length(result) > 0 then
+                if result > '' then
                   FErrorCode := FErrorCode or 1
                 else
                   FErrorCode := FErrorCode or 2;
@@ -2822,7 +2822,7 @@ var
                 result := result + ss[1]
               else
               begin
-                if length(result) > 0 then
+                if result > '' then
                   FErrorCode := FErrorCode or 4
                 else
                   FErrorCode := FErrorCode or 2;
@@ -2835,7 +2835,7 @@ var
                 result := result + ss[1]
               else
               begin
-                if length(result) > 0 then
+                if result > '' then
                   _isInstruction := true
                 else
                   FErrorCode := FErrorCode or 1024;
@@ -2848,7 +2848,7 @@ var
                 result := result + ss[1]
               else
               begin
-                if length(result) > 0 then
+                if result > '' then
                   _isClosedTag := true
                 else
                   FErrorCode := FErrorCode or 8;
@@ -2867,7 +2867,7 @@ var
             begin
               if count_quote = 0 then
               begin
-                if length(result) > 0 then // <tag ... param = value"...>
+                if result > '' then // <tag ... param = value"...>
                 begin
                   FErrorCode := FErrorCode or 16;
                   break;
@@ -2921,7 +2921,7 @@ var
       if end_tag then break;
       _get_char();
       if err then break;
-      if length(ss) >= 1 then
+      if ss > '' then
       begin
         RawTag();
         case ss[1] of
@@ -3044,7 +3044,7 @@ var
       if end_tag then break;
       _get_char();
       if err then break;
-      if length(ss) >= 1 then
+      if ss > '' then
       begin
         RawTag();
         CheckClose(_isClosedTag, 64);
@@ -3055,7 +3055,7 @@ var
             begin
               if _isTagName = 0 then
               begin
-                if length(s) > 0 then
+                if s > '' then
                 begin
                   FTagName := s;
                   s := '';
@@ -3083,7 +3083,7 @@ var
               _isParam := false;
               if _isTagName > 0 then
               begin
-                if length(s) > 0 then
+                if s > '' then
                 begin
                   Attributes.Add(s, GetParamValue(), FAttributesMatch);
                   s := '';
@@ -3091,7 +3091,7 @@ var
               end else
               begin
                 //< =...>
-                if length(s) > 0 then
+                if s > '' then
                 begin
                   FTagName := s;
                   s := '';
@@ -3103,7 +3103,7 @@ var
             end;
           '!':  //комментарий / CDATA
             begin
-              if (_isTagName = 0) and (length(s) = 0) then
+              if (_isTagName = 0) and (s = '') then
               begin
                 _tmp := GetCommentCDATA();
                 if end_tag then
@@ -3120,7 +3120,7 @@ var
             end;
           '?':
             begin
-              if (_isTagName = 0) and (length(s) = 0) then
+              if (_isTagName = 0) and (s = '') then
                 FTagType := 1
               else
                 _isInstruction := true;
@@ -3128,7 +3128,7 @@ var
           '/':
             begin
               // сделать проверку, если текст тэга не пустой
-              if (_isTagName = 0) and (length(s) = 0) then
+              if (_isTagName = 0) and (s = '') then
                 FTagType := 6
               else
               begin
@@ -3142,7 +3142,7 @@ var
             begin
               if (_isTagName = 0) then
               begin
-                if length(s) > 0 then
+                if s > '' then
                 begin
                   FTagName := s;
                   _isTagName := 1;
@@ -3151,7 +3151,7 @@ var
                   FErrorCode := FErrorCode or 2048;
               end else
               begin
-                if length(s) > 0 then
+                if s > '' then
                   _isParam := true;
               end;
             end;
@@ -3160,7 +3160,7 @@ var
             begin
               if _isParam then
               begin
-                if length(s) > 0 then
+                if s > '' then
                 begin
                   _isParam := false;
                   s := '';
@@ -3186,7 +3186,7 @@ begin
     _get_char();
     if err then break;
 
-    if length(ss) >= 1 then
+    if ( ss > '' ) then
     begin
       case ss[1] of
         '<':
@@ -3199,7 +3199,7 @@ begin
               FErrorCode := FErrorCode or 131072
             else
               if end_tag then
-                if (FTagType = 0) and (length(FTagName) > 0) then
+                if (FTagType = 0) and (FTagName > '') then
                   FTagType := 4;
 
             Break;

@@ -907,7 +907,7 @@ begin
       Attributes.Add('HTTP-EQUIV', 'CONTENT-TYPE');
 
       s := '';
-      if length(trim(CodePageName)) > 0 then
+      if trim(CodePageName) > '' then
         s := '; CHARSET='+ CodePageName;
       Attributes.Add('CONTENT', 'TEXT/HTML'+s);
       WriteTag('META','', true, false, false);
@@ -1300,7 +1300,7 @@ var
     begin
       Attributes.Clear();
       Attributes.Add('ss:ID', _id, false);
-      if  length(_name) > 0 then
+      if _name > '' then
         Attributes.Add('ss:Name', _name, false);
       WriteTagNode('Style', true, true);
       Attributes.Clear();
@@ -1603,16 +1603,16 @@ var
             {tut}
             //Сделать проверку на формулу?
             isFormula := false;
-            if length(ProcessedCell.Formula) > 0 then
+            if ( ProcessedCell.Formula > '' ) then
             begin
               AttrCell.Add('ss:Formula', ProcessedCell.Formula, false);
               isFormula := true;
             end;
             //Href
-            if length(ProcessedCell.Href) > 0 then
+            if ( ProcessedCell.Href > '' ) then
             begin
               AttrCell.Add('ss:HRef', ProcessedCell.Href, false);
-              if length(ProcessedCell.HRefScreenTip) > 0 then
+              if ( ProcessedCell.HRefScreenTip > '' ) then
                 AttrCell.Add('x:HRefScreenTip', ProcessedCell.HRefScreenTip, false);
             end;
             //StyleID
@@ -1639,7 +1639,7 @@ var
             AttrData.Clear();
             // для OpenOffice Calc добавлен текст "or (j = ProcessedSheet.ColCount - 1)"
             // т.к. в ОО таблицы отображались в некоторых случаях некорректно
-            if (length(ProcessedCell.Data) > 0) or (j = ProcessedSheet.ColCount - 1) or
+            if (ProcessedCell.Data > '') or (j = ProcessedSheet.ColCount - 1) or
                (isFormula) then
             begin
               AttrData.Add('ss:Type', ZCellTypeToStr(ProcessedCell.CellType), false);
@@ -1652,7 +1652,7 @@ var
             AttrCommentData.Clear();
             if ProcessedCell.ShowComment then
             begin
-              if length(ProcessedCell.CommentAuthor) > 0 then
+              if ( ProcessedCell.CommentAuthor > '' ) then
                 AttrComment.Add('ss:Author', ProcessedCell.CommentAuthor, false);
               if ProcessedCell.AlwaysShowComment then
                 AttrComment.Add('ss:ShowAlways','1', false);
@@ -1673,7 +1673,7 @@ var
               if isRepeatablePrint then
                   WriteEmptyTag('NamedCell', AttrPrintTitles);
               //Data
-              if (length(ProcessedCell.Data) > 0) or
+              if ( ProcessedCell.Data > '' ) or
                  (isFormula) then
               begin
                 CorrectStrForXML(ProcessedCell.Data, s, b);
@@ -1746,7 +1746,7 @@ var
 
       //Header
       Attributes.Clear();
-      if length(ProcessedSheet.SheetOptions.HeaderData) > 0 then
+      if ( ProcessedSheet.SheetOptions.HeaderData > '' ) then
       begin
         if ProcessedSheet.SheetOptions.HeaderMargin <> 13 then
           Attributes.Add('x:Margin', ZEFloatSeparator(FormatFloat('0.##',ProcessedSheet.SheetOptions.HeaderMargin / ZE_MMinInch)));
@@ -1756,7 +1756,7 @@ var
 
       //Footer
       Attributes.Clear();
-      if length(ProcessedSheet.SheetOptions.FooterData) > 0 then
+      if ( ProcessedSheet.SheetOptions.FooterData > '' ) then
       begin
         if ProcessedSheet.SheetOptions.FooterMargin <> 13 then
           Attributes.Add('x:Margin', ZEFloatSeparator(FormatFloat('0.##',ProcessedSheet.SheetOptions.FooterMargin / ZE_MMinInch)));
@@ -1821,7 +1821,7 @@ var
         if (_vMode = ZSplitFrozen) then
           s := '1';
 
-        if (length(s) > 0) then
+        if s > '' then
           WriteTag('ActivePane', s, true, false, false);
       end; //fix or split
 
@@ -1929,7 +1929,7 @@ var
   function _StrToInt(val: string): integer;
   begin
     result := 0;
-    if length(val) > 0 then
+    if val > '' then
     try
       result := StrToInt(val);
     except
@@ -2024,10 +2024,10 @@ var
         if _xml.TagName = 'Font' then
         begin
           s := _xml.Attributes.ItemsByName['ss:FontName'];
-          if length(s) > 0 then
+          if s > '' then
             font.Name := s;
           s := _xml.Attributes.ItemsByName['x:CharSet'];
-          if length(s) > 0 then
+          if s > '' then
             font.Charset := StrToInt(s);
           FS := [];
           if ZEStrToBoolean(_xml.Attributes.ItemsByName['ss:Italic']) then
@@ -2037,15 +2037,15 @@ var
           if ZEStrToBoolean(_xml.Attributes.ItemsByName['ss:StrikeThrough']) then
             Include(FS, fsStrikeout);
           s := _xml.Attributes.ItemsByName['ss:Underline'];
-          if length(s) > 0 then
+          if s > '' then
             if UpperCase(s) <> 'NONE' then
                Include(FS, fsUnderline);
           font.Style := FS;
           s := _xml.Attributes.ItemsByName['ss:Size'];
-          if length(s) > 0 then
+          if s > '' then
             font.Size := StrToInt(s);
           s := _xml.Attributes.ItemsByName['ss:Color'];
-          if length(s) > 0 then
+          if s > '' then
             font.Color := HTMLHexToColor(s);
         end else
         //Borders
@@ -2057,7 +2057,7 @@ var
           if _xml.TagName = 'Border' then
           begin
             s := _xml.Attributes.ItemsByName['ss:Position'];
-            if length(s) > 0 then
+            if s > '' then
             begin
               if s = 'Left' then
                 i := 0
@@ -2072,13 +2072,13 @@ var
               else
                 i := 5;
               s := _xml.Attributes.ItemsByName['ss:LineStyle'];
-              if length(s) > 0 then
+              if s > '' then
                 Border[i].LineStyle := StrToZBorderType(s);
               s := _xml.Attributes.ItemsByName['ss:Color'];
-              if length(s) > 0 then
+              if s > '' then
                 Border[i].Color := HTMLHexToColor(s);
               s := _xml.Attributes.ItemsByName['ss:Weight'];
-              if length(s) > 0 then
+              if s > '' then
                 Border[i].Weight := _StrToInt(s);
             end
           end;
@@ -2087,13 +2087,13 @@ var
         if _xml.TagName = 'Interior' then
         begin
           s := _xml.Attributes.ItemsByName['ss:Color'];
-          if length(s) > 0 then
+          if s > '' then
             BGColor := HTMLHexToColor(s);
           s := _xml.Attributes.ItemsByName['ss:Pattern'];
-          if length(s) > 0 then
+          if s > '' then
             CellPattern := StrToZCellPattern(s);
           s := _xml.Attributes.ItemsByName['ss:PatternColor'];
-          if length(s) > 0 then
+          if s > '' then
             PatternColor := HTMLHexToColor(s);
         end else
         //NumberFormat
@@ -2108,10 +2108,10 @@ var
         if _xml.TagName = 'Protection' then
         begin
           s := _xml.Attributes.ItemsByName['x:HideFormula'];
-          if length(s) > 0 then
+          if s > '' then
             HideFormula := ZEStrToBoolean(s);
           s := _xml.Attributes.ItemsByName['ss:Protected'];
-          if length(s) > 0 then
+          if s > '' then
             Protect := ZEStrToBoolean(s);
         end;
       end;
@@ -2224,20 +2224,20 @@ var
     ProcessedSheet := XMLSS.Sheets[PageNum];
 
     s := _xml.Attributes.ItemsByName['ss:DefaultColumnWidth'];
-    if length(s) > 0 then
+    if s > '' then
       ProcessedSheet.DefaultColWidth := ZETryStrToFloat(s) // /100
     else
       ProcessedSheet.DefaultColWidth := 48;
     s := _xml.Attributes.ItemsByName['ss:DefaultRowHeight'];
-    if length(s) > 0 then
+    if s > '' then
       ProcessedSheet.DefaultRowHeight := ZETryStrToFloat(s) // /100
     else
       ProcessedSheet.DefaultRowHeight := 12.75;
     s := _xml.Attributes.ItemsByName['ss:ExpandedColumnCount'];
-    if length(s) > 0 then
+    if s > '' then
       ProcessedSheet.ColCount := _StrToInt(s);
     s := _xml.Attributes.ItemsByName['ss:ExpandedRowCount'];
-    if length(s) > 0 then
+    if s > '' then
       ProcessedSheet.RowCount := _StrToInt(s);
     idR := -1;
     idColumn := -1;
@@ -2252,7 +2252,7 @@ var
         if _xml.TagType in [4, 5] then
         begin
           s := _xml.Attributes.ItemsByName['ss:Index'];
-          if length(s) > 0 then
+          if s > '' then
             idC := _StrToInt(s) - 1
           else
             inc(idC);
@@ -2260,13 +2260,13 @@ var
           t2 := 0; //вниз 
           CheckCol(PageNum, idC + 1);
           s := _xml.Attributes.ItemsByName['ss:MergeAcross'];
-          if length(s) > 0 then
+          if s > '' then
           begin
             t1 := _StrToInt(s);
             CheckCol(PageNum, idC + 1 + t1);
           end;
           s := _xml.Attributes.ItemsByName['ss:MergeDown'];
-          if length(s) > 0 then
+          if s > '' then
           begin
             t2 := _StrToInt(s);
             CheckRow(PageNum, idR + 1 + t2);
@@ -2275,16 +2275,16 @@ var
           if t1 + t2 > 0 then
             ProcessedSheet.MergeCells.AddRectXY(idC, idR, idC + t1, idR + t2);
           s := _xml.Attributes.ItemsByName['ss:Formula'];
-          if length(s) > 0 then
+          if s > '' then
             ProcessedSheet.Cell[idC, idR].Formula := s;
           s := _xml.Attributes.ItemsByName['ss:HRef'];
-          if length(s) > 0 then
+          if s > '' then
             ProcessedSheet.Cell[idC, idR].Href := s;
           s := _xml.Attributes.ItemsByName['x:HRefScreenTip'];
-          if length(s) > 0 then
+          if s > '' then
             ProcessedSheet.Cell[idC, idR].HRefScreenTip := s;
           s := _xml.Attributes.ItemsByName['ss:StyleID'];
-          if length(s) > 0 then
+          if s > '' then
             ProcessedSheet.Cell[idC, idR].CellStyle := IDByStyleName(s);
 
           if _xml.TagType = 4 then
@@ -2304,10 +2304,10 @@ var
                   _isComment := true;
                   ProcessedSheet.Cell[idC, idR].ShowComment := true;
                   s := _xml.Attributes.ItemsByName['ss:Author'];
-                  if length(s) > 0 then
+                  if s > '' then
                     ProcessedSheet.Cell[idC, idR].CommentAuthor := s;
                   s := _xml.Attributes.ItemsByName['ss:ShowAlways'];
-                  if length(s) > 0 then
+                  if s > '' then
                     ProcessedSheet.Cell[idC, idR].AlwaysShowComment := ZEStrToBoolean(s);
                 end;
               end else
@@ -2319,7 +2319,7 @@ var
                   if not _isComment then
                   begin
                     s := _xml.Attributes.ItemsByName['ss:Type'];
-                    if length(s) > 0 then
+                    if s > '' then
                       ProcessedSheet.Cell[idC, idR].CellType := StrToZCellType(s);
                   end;
                   s := '';
@@ -2350,13 +2350,13 @@ var
         begin
           idC := -1;
           s := _xml.Attributes.ItemsByName['ss:Index'];
-          if length(s) > 0 then
+          if s > '' then
             idR := StrToInt(s) - 1
           else
             inc(idR);
 
           s := _xml.Attributes.ItemsByName['ss:Span'];
-          if length(s) > 0 then
+          if s > '' then
             cntRow := StrToInt(s)
           else
             cntRow := 1;
@@ -2367,16 +2367,16 @@ var
             ProcessedRow := ProcessedSheet.Rows[idR];
 
             s := _xml.Attributes.ItemsByName['ss:Height'];
-            if length(s) > 0 then
+            if s > '' then
               ProcessedRow.Height := ZETryStrToFloat(s);
             s := _xml.Attributes.ItemsByName['ss:StyleID'];
-            if length(s) > 0 then
+            if s > '' then
               ProcessedRow.StyleID := IDByStyleName(s);
             s := _xml.Attributes.ItemsByName['ss:AutoFitHeight'];
-            if length(s) > 0 then
+            if s > '' then
               ProcessedRow.AutoFitHeight := ZEStrToBoolean(s);
             s := _xml.Attributes.ItemsByName['ss:Hidden'];
-            if length(s) > 0 then
+            if s > '' then
               ProcessedRow.Hidden := ZEStrToBoolean(s);
 
             Inc(idR); Dec(cntRow);
@@ -2390,13 +2390,13 @@ var
       if _xml.TagName = 'Column' then
       begin
         s := _xml.Attributes.ItemsByName['ss:Index'];
-        if length(s) > 0 then
+        if s > '' then
           idColumn := StrToInt(s) - 1
         else
           inc(idColumn);
 
         s := _xml.Attributes.ItemsByName['ss:Span'];
-        if length(s) > 0 then
+        if s > '' then
           cntColumn := StrToInt(s)
         else
           cntColumn := 1;
@@ -2407,16 +2407,16 @@ var
           ProcessedColumn := ProcessedSheet.Columns[idColumn];
 
           s := _xml.Attributes.ItemsByName['ss:Width'];
-          if length(s) > 0 then
+          if s > '' then
             ProcessedColumn.Width := ZETryStrToFloat(s);
           s := _xml.Attributes.ItemsByName['ss:StyleID'];
-          if length(s) > 0 then
+          if s > '' then
             ProcessedColumn.StyleID := IDByStyleName(s);
           s := _xml.Attributes.ItemsByName['ss:AutoFitWidth'];
-          if length(s) > 0 then
+          if s > '' then
             ProcessedColumn.AutoFitWidth := ZEStrToBoolean(s);
           s := _xml.Attributes.ItemsByName['ss:Hidden'];
-          if length(s) > 0 then
+          if s > '' then
             ProcessedColumn.Hidden := ZEStrToBoolean(s);
 
           Dec(cntColumn); Inc(idColumn);
@@ -2474,36 +2474,36 @@ var
             _SheetOptions.CenterVertical := true else
           begin
             s := _xml.Attributes.ItemsByName['x:StartPageNumber'];
-            if length(s) > 0 then
+            if s > '' then
               _SheetOptions.StartPageNumber := _StrToInt(s);
           end;
         end else
         if IfTag('PageMargins', 5) then
         begin
           s := _xml.Attributes.ItemsByName['x:Bottom'];
-          if length(s) > 0 then
+          if s > '' then
             _SheetOptions.MarginBottom := round(ZETryStrToFloat(s)*25.4);
           s := _xml.Attributes.ItemsByName['x:Left'];
-          if length(s) > 0 then
+          if s > '' then
             _SheetOptions.MarginLeft := round(ZETryStrToFloat(s)*25.4);
           s := _xml.Attributes.ItemsByName['x:Right'];
-          if length(s) > 0 then
+          if s > '' then
             _SheetOptions.MarginRight := round(ZETryStrToFloat(s)*25.4);
           s := _xml.Attributes.ItemsByName['x:Top'];
-          if length(s) > 0 then
+          if s > '' then
             _SheetOptions.MarginTop := round(ZETryStrToFloat(s)*25.4);
         end else
         if IfTag('Header', 5) then
         begin
           s := _xml.Attributes.ItemsByName['x:Margin'];
-          if length(s) > 0 then
+          if s > '' then
             _SheetOptions.HeaderMargin := round(ZETryStrToFloat(s)*25.4);
           _SheetOptions.HeaderData := _xml.Attributes.ItemsByName['x:Data'];
         end else
         if IfTag('Footer', 5) then
         begin
           s := _xml.Attributes.ItemsByName['x:Margin'];
-          if length(s) > 0 then
+          if s > '' then
             _SheetOptions.FooterMargin := round(ZETryStrToFloat(s)*25.4);
           _SheetOptions.FooterData := _xml.Attributes.ItemsByName['x:Data'];
         end;

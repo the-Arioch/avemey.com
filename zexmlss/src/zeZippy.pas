@@ -480,8 +480,8 @@ begin
   end;
 
   inherited;
-   // calls OnChang*** events in (almost) proper order
-   // laos this "free later" approach matches the one from Delphi 2010+
+   // calls OnChange*** events in (almost) proper order
+   // this "free later" approach matches the one from Delphi 2010+
 
   if OwnsObjects then
      for i := Low(o) to High(o) do o[i].Free;
