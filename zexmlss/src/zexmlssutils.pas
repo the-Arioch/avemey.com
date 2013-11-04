@@ -1519,7 +1519,7 @@ var
       if round(ProcessedSheet.DefaultColWidth*100) <> 4800 then
         Attributes.Add('ss:DefaultColumnWidth', ZEFloatSeparator(FormatFloat('0.#####',ProcessedSheet.DefaultColWidth)), false);
       if round(ProcessedSheet.DefaultRowHeight*100) <> 1275 then
-        Attributes.Add('ss:DefaultRowHeight', ZEFloatSeparator(FormatFloat('0.#####',ProcessedSheet.DefaultRowHeight * 100)), false);
+        Attributes.Add('ss:DefaultRowHeight', ZEFloatSeparator(FormatFloat('0.#####',ProcessedSheet.DefaultRowHeight {* 100})), false);
       Attributes.Add('x:FullRows', '1', false);
       Attributes.Add('x:FullColumns', '1', false);
       WriteTagNode('Table', true, true, true);
@@ -2194,12 +2194,12 @@ var
   begin
     s := _xml.Attributes.ItemsByName['ss:DefaultColumnWidth'];
     if length(s) > 0 then
-      XMLSS.Sheets[PageNum].DefaultColWidth := ZETryStrToFloat(s)/100
+      XMLSS.Sheets[PageNum].DefaultColWidth := ZETryStrToFloat(s) // /100
     else
       XMLSS.Sheets[PageNum].DefaultColWidth := 48;
     s := _xml.Attributes.ItemsByName['ss:DefaultRowHeight'];
     if length(s) > 0 then
-      XMLSS.Sheets[PageNum].DefaultRowHeight := ZETryStrToFloat(s)/100
+      XMLSS.Sheets[PageNum].DefaultRowHeight := ZETryStrToFloat(s) // /100
     else
       XMLSS.Sheets[PageNum].DefaultRowHeight := 12.75;
     s := _xml.Attributes.ItemsByName['ss:ExpandedColumnCount'];
