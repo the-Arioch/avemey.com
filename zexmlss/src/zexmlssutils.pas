@@ -2193,10 +2193,11 @@ var
   procedure ReadXMLTable(const PageNum: integer);
   var
     s: string;
-    idC, idR, idColumn, cntColumn: integer;
+    idC, idR, idColumn, cntColumn, cntRow: integer;
     t1, t2: integer;
     _isComment: boolean;
     ProcessedColumn: TZColOptions; ProcessedSheet: TZSheet;
+    ProcessedRow: TZRowOptions;
 
   begin
     ProcessedSheet := XMLSS.Sheets[PageNum];
@@ -2329,22 +2330,39 @@ var
           idC := -1;
           s := _xml.Attributes.ItemsByName['ss:Index'];
           if length(s) > 0 then
-            idR := _StrToInt(s) - 1
+            idR := StrToInt(s) - 1
           else
             inc(idR);
-          CheckRow(PageNum, idR + 1);
-          s := _xml.Attributes.ItemsByName['ss:Height'];
+
+          s := _xml.Attributes.ItemsByName['ss:Span'];
           if length(s) > 0 then
-            ProcessedSheet.Rows[idR].Height := ZETryStrToFloat(s);
-          s := _xml.Attributes.ItemsByName['ss:StyleID'];
-          if length(s) > 0 then
-            ProcessedSheet.Rows[idR].StyleID := IDByStyleName(s);
-          s := _xml.Attributes.ItemsByName['ss:AutoFitHeight'];
-          if length(s) > 0 then
-            ProcessedSheet.Rows[idR].AutoFitHeight := ZEStrToBoolean(s);
-          s := _xml.Attributes.ItemsByName['ss:Hidden'];
-          if length(s) > 0 then
-            ProcessedSheet.Rows[idR].Hidden := ZEStrToBoolean(s);
+            cntRow := StrToInt(s)
+          else
+            cntRow := 1;
+
+          CheckRow(PageNum, idR + cntRow);
+
+          while cntRow > 0 do begin
+            ProcessedRow := ProcessedSheet.Rows[idR];
+
+            s := _xml.Attributes.ItemsByName['ss:Height'];
+            if length(s) > 0 then
+              ProcessedRow.Height := ZETryStrToFloat(s);
+            s := _xml.Attributes.ItemsByName['ss:StyleID'];
+            if length(s) > 0 then
+              ProcessedRow.StyleID := IDByStyleName(s);
+            s := _xml.Attributes.ItemsByName['ss:AutoFitHeight'];
+            if length(s) > 0 then
+              ProcessedRow.AutoFitHeight := ZEStrToBoolean(s);
+            s := _xml.Attributes.ItemsByName['ss:Hidden'];
+            if length(s) > 0 then
+              ProcessedRow.Hidden := ZEStrToBoolean(s);
+
+            Inc(idR); Dec(cntRow);
+            // by Microsoft specifications, rows with ss:Span should have NO CELLS
+            // so we may not care that idR could only allow to fill one row with Cells
+          end;
+          Dec(idR);
         end;
       end else
       //Column
@@ -2382,6 +2400,7 @@ var
 
           Dec(cntColumn); Inc(idColumn);
         end;
+        Dec(idColumn);
       end;
     end;
   end;
