@@ -2099,7 +2099,9 @@ var
         //NumberFormat
         if _xml.TagName = 'NumberFormat' then begin
           s := _xml.Attributes.ItemsByName['ss:Format'];
-          if s = '' then s := 'General';
+          if s = ''
+             then s := 'General'
+             else s := ZEReplaceEntity(s);
           NumberFormat := s;
         end else
         //Protection

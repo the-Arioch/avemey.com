@@ -934,7 +934,6 @@ end;
 function CheckStrEntity(const st: ansistring; checkamp: boolean = true): ansistring;
 var
   i, kol: integer;
-
 begin
   result := '';
   kol := length(st);
@@ -1530,7 +1529,7 @@ end;
 function TZAttributes.ToString(quote: ansichar; CheckEntity: boolean; addempty: boolean): ansistring;
 var
   i: integer;
-  s: string;
+  s: AnsiString;
 begin
   if (quote <> '"') and (quote <> '''') then
     quote := '"';
