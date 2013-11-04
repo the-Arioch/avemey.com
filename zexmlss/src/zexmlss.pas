@@ -252,6 +252,7 @@ type
     FNumberFormat: string;
     FProtect: boolean;
     FHideFormula: boolean;
+    FNamedStyle: string; // some styles in Excel are named, used by default in Excel 2010 save to XML SS
     procedure SetFont(const Value: TFont);
     procedure SetBorder(const Value: TZBorder);
     procedure SetAlignment(const Value: TZAlignment);
@@ -275,6 +276,7 @@ type
     property HideFormula: boolean read FHideFormula write FHideFormula default false;
     property CellPattern: TZCellPattern read FCellPattern write SetCellPattern default ZPNone;
     property NumberFormat: string read FNumberFormat write SetNumberFormat;
+    property Name: string read FNamedStyle write FNamedStyle;
   end;
 
   //стили
@@ -287,7 +289,6 @@ type
     function  GetStyle(num: integer): TZStyle;
     procedure SetStyle(num: integer; const Value: TZStyle);
     procedure SetCount(const Value: integer);
-  protected
   public
     constructor Create(); virtual;
     destructor Destroy(); override;
@@ -295,7 +296,8 @@ type
     procedure Assign(Source: TPersistent); override;
     procedure Clear(); virtual;
     function DeleteStyle(num: integer):integer; virtual;
-    function Find(const Style: TZStyle): integer;
+    function Find(const Style: TZStyle): integer; overload;
+    function Find(const Name: string; const NoDefault: boolean = false): integer; overload;
     property Items[num: integer]: TZStyle read GetStyle write SetStyle; default;
     property Count: integer read FCount write SetCount;
   published
@@ -1514,6 +1516,7 @@ begin
     FNumberFormat := zSource.NumberFormat;
     FProtect := zSource.Protect;
     FHideFormula := zSource.HideFormula;
+    FNamedStyle  := zSource.FNamedStyle;
   end else
     inherited Assign(Source);
 end;
@@ -1629,6 +1632,23 @@ begin
   inherited Destroy();
 end;
 
+function TZStyles.Find(const Name: string; const NoDefault: boolean): integer;
+var
+  i: integer;
+begin
+  for i := -1 to Count - 1 do
+    if Items[i].Name = Name then
+    begin
+      result := i;
+      exit;
+    end;
+
+  if NoDefault
+     then Result := -2
+     else Result := -1;
+end;
+
+
 //Ищет стиль Style
 //Возвращает:
 //     -2          - стиль не найден
@@ -1706,6 +1726,7 @@ begin
     begin
       FStyles[i] := TZStyle.Create;
       FStyles[i].Assign(FDefaultStyle);
+      FStyles[i].Name := ''; // Only one style can have any given name
     end;
   end else
   begin

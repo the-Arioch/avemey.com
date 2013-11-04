@@ -1090,10 +1090,10 @@ var
 
       WriteEndTagNode();
       WriteTagNode('ExcelWorkbook',[ToAttribute('xmlns','urn:schemas-microsoft-com:office:excel')], true, true, false);
-      WriteTag('WindowHeight', inttostr(XMLSS.DocumentProperties.WindowHeight), true, false, false);
-      WriteTag('WindowWidth', inttostr(XMLSS.DocumentProperties.WindowWidth), true, false, false);
-      WriteTag('WindowTopX', inttostr(XMLSS.DocumentProperties.WindowTopX), true, false, false);
-      WriteTag('WindowTopY', inttostr(XMLSS.DocumentProperties.WindowTopY), true, false, false);
+      WriteTag('WindowHeight', XMLSS.DocumentProperties.WindowHeight);
+      WriteTag('WindowWidth', XMLSS.DocumentProperties.WindowWidth);
+      WriteTag('WindowTopX', XMLSS.DocumentProperties.WindowTopX);
+      WriteTag('WindowTopY', XMLSS.DocumentProperties.WindowTopY);
       if XMLSS.DocumentProperties.ModeR1C1 then
         _xml.WriteEmptyTag('RefModeR1C1');
       WriteTag('ProtectStructure', 'False');
@@ -1359,13 +1359,10 @@ var
       if Attributes.Count > 0 then
         WriteEmptyTag('Interior', true, true);
       //=====NumberFormat======
-      if (length(XMLSS.Styles.DefaultStyle.NumberFormat) > 0) then
-      begin
-        Attributes.Clear();
-        AddAttribute('ss:Format', _style.NumberFormat, 'General', XMLSS.Styles.DefaultStyle.NumberFormat, _def);
-        if Attributes.Count > 0 then
-          WriteEmptyTag('NumberFormat', true, true);
-      end;
+      Attributes.Clear();
+      AddAttribute('ss:Format', _style.NumberFormat, 'General', XMLSS.Styles.DefaultStyle.NumberFormat, _def);
+      if Attributes.Count > 0 then
+         WriteEmptyTag('NumberFormat', true, true);
       //=====Protection========
       Attributes.Clear();
       AddAttribute('x:HideFormula', _style.HideFormula, false, XMLSS.Styles.DefaultStyle.HideFormula, _def);
@@ -1438,7 +1435,7 @@ var
             b1 := true;
           end;
           _xml.WriteTagNode(s2, true, true, false);
-          _xml.WriteTag(s3, inttostr(num), true, false, false);
+          _xml.WriteTag(s3, num);
           _xml.WriteEndTagNode(); //s2
         end;
       end;
@@ -1775,9 +1772,9 @@ var
       begin
         WriteTagNode('Print',true, true, true);
         WriteEmptyTag('ValidPrinterInfo');
-        WriteTag('PaperSizeIndex',inttostr(ProcessedSheet.SheetOptions.PaperSize), true, false, false);
-        WriteTag('HorizontalResolution', '600', true, false, false);  //может, тоже добавить?
-        WriteTag('VerticalResolution', '600', true, false, false);
+        WriteTag('PaperSizeIndex',ProcessedSheet.SheetOptions.PaperSize);
+        WriteTag('HorizontalResolution', 600);
+        WriteTag('VerticalResolution', 600);
         WriteEndTagNode(); //Print
       end;
 
@@ -1835,16 +1832,16 @@ var
         WriteTagNode('Pane',true, true, false);
         WriteTag('Number', '3', true, false, false);
         if ProcessedSheet.SheetOptions.ActiveRow <> 0 then
-          WriteTag('ActiveRow', inttostr(ProcessedSheet.SheetOptions.ActiveRow), true, false, false);
+          WriteTag('ActiveRow', ProcessedSheet.SheetOptions.ActiveRow);
         if ProcessedSheet.SheetOptions.ActiveCol <> 0 then
-          WriteTag('ActiveCol', inttostr(ProcessedSheet.SheetOptions.ActiveCol), true, false, false);
+          WriteTag('ActiveCol', ProcessedSheet.SheetOptions.ActiveCol);
         WriteEndTagNode(); //Pane
         WriteEndTagNode(); //Panes
       end;
 
       {tut}//Узнать, как шифруются индексы цветов
       if ProcessedSheet.TabColor <> ClWindow then
-        WriteTag('TabColorIndex', inttostr(ProcessedSheet.TabColor), true, false, false);
+        WriteTag('TabColorIndex', ProcessedSheet.TabColor);
 
       WriteEndTagNode(); //WorksheetOptions
 
@@ -1961,7 +1958,6 @@ var
   function IDByStyleName(const StyleName: string): integer;
   var
     i: integer;
-
   begin
     result := -1;
     for i := 0 to XMLSS.Styles.Count - 1 do
@@ -1983,14 +1979,35 @@ var
     s: string;
     i: integer;
     fs: TFontStyles;
+    ProcessedStyle: TZStyle;
   begin
-    if IDStyle <> -1 then
-        XMLSS.Styles[IDStyle].Assign(XMLSS.Styles[-1]);
+    ProcessedStyle := XMLSS.Styles[IDStyle];
+
+    // non-Default style may inherit from spcecific style or "Default"
+    // however it is never told, that "Default" style can not have specified Parent
+    s := _xml.Attributes.ItemsByName['ss:Parent'];
+    if (s = '') or (s = 'Default')
+       then i := -1
+       else begin
+         i := IDByStyleName(s);
+         if i < 0 then i := IDStyle;
+         // if "not found" -> setting "no inheritance" condition.
+         // maybe should be error as in MS specifications
+       end;
+    if IDStyle <> i then begin
+      ProcessedStyle.Assign(XMLSS.Styles[i]);
+      ProcessedStyle.Name := '';
+    end;
+
+    s := _xml.Attributes.ItemsByName['ss:Name'];
+    if s <> '' then
+       ProcessedStyle.Name := s;
+
     while not IfTag('Style', 6) do
     begin
       if _xml.Eof() then break;
       _xml.ReadTag();
-      with XMLSS.Styles[IDStyle] do
+      with ProcessedStyle do
       begin
         //Alignment
         if _xml.TagName = 'Alignment' then
@@ -2011,7 +2028,7 @@ var
             font.Name := s;
           s := _xml.Attributes.ItemsByName['x:CharSet'];
           if length(s) > 0 then
-            font.Charset := _StrToInt(s);
+            font.Charset := StrToInt(s);
           FS := [];
           if ZEStrToBoolean(_xml.Attributes.ItemsByName['ss:Italic']) then
             Include(FS, fsItalic);
@@ -2026,7 +2043,7 @@ var
           font.Style := FS;
           s := _xml.Attributes.ItemsByName['ss:Size'];
           if length(s) > 0 then
-            font.Size := _StrToInt(s);
+            font.Size := StrToInt(s);
           s := _xml.Attributes.ItemsByName['ss:Color'];
           if length(s) > 0 then
             font.Color := HTMLHexToColor(s);
@@ -2080,9 +2097,11 @@ var
             PatternColor := HTMLHexToColor(s);
         end else
         //NumberFormat
-        if _xml.TagName = 'NumberFormat' then
-          NumberFormat := _xml.Attributes.ItemsByName['ss:Format']
-        else
+        if _xml.TagName = 'NumberFormat' then begin
+          s := _xml.Attributes.ItemsByName['ss:Format'];
+          if s = '' then s := 'General';
+          NumberFormat := s;
+        end else
         //Protection
         if _xml.TagName = 'Protection' then
         begin
@@ -2644,8 +2663,8 @@ begin
     ProcessReadXML();
   finally
     FreeAndNil(_xml);
-    SetLength(StyleNames, 0);
-    StyleNames := nil;
+//    SetLength(StyleNames, 0);
+//    StyleNames := nil;
   end;
 end; //ReadEXMLSS
 

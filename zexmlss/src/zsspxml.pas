@@ -382,6 +382,7 @@ type
     procedure WriteTag(TagName: string; Text: string; StartNewLine: boolean; CloseTagNewLine: boolean; CheckEntity: boolean = true); overload;
     procedure WriteTag(TagName: string; Text: string; SAttributes: TZAttributesH); overload;
     procedure WriteTag(TagName: string; Text: string; AttrArray: array of TZAttrArrayH); overload;
+    procedure WriteTag(TagName: string; const IntValue: integer); overload;
     procedure WriteTag(TagName: string; Text: string); overload;
     procedure WriteTagNode(TagName: string; SAttributes: TZAttributesH; StartNewLine: boolean; CloseTagNewLine: boolean; CheckEntity: boolean = true); overload;
     procedure WriteTagNode(TagName: string; AttrArray: array of TZAttrArrayH; StartNewLine: boolean; CloseTagNewLine: boolean; CheckEntity: boolean = true); overload;
@@ -1529,22 +1530,19 @@ end;
 function TZAttributes.ToString(quote: ansichar; CheckEntity: boolean; addempty: boolean): ansistring;
 var
   i: integer;
-
+  s: string;
 begin
   if (quote <> '"') and (quote <> '''') then
     quote := '"';
   result := '';
-  if CheckEntity then
-  begin
     //название атрибута, надеюсь, будет без спецсимволов ^__^
-    for i := 0 to Count - 1 do
-      if (length(FItems[i][1]) > 0) or (addempty) then
-        result := result + ' ' + FItems[i][0] + '=' + quote + CheckStrEntity(FItems[i][1]) + quote;
-  end else
-  begin
-    for i := 0 to Count - 1 do
-      if (length(FItems[i][1]) > 0) or (addempty) then
-        result := result + ' ' + FItems[i][0] + '=' + quote + FItems[i][1] + quote;
+  for i := 0 to Count - 1 do begin
+    s := FItems[i][1];
+    if CheckEntity
+       then s := CheckStrEntity(s);
+
+    if (length(FItems[i][1]) > 0) or (addempty) then
+      result := result + ' ' + FItems[i][0] + '=' + quote + s + quote;
   end;
 end;
 
@@ -3745,6 +3743,11 @@ end;
 procedure TZsspXMLWriterH.WriteTag(TagName: string; Text: string; AttrArray: array of TZAttrArrayH);
 begin
   WriteTag(TagName, Text, AttrArray, true, false, true);
+end;
+
+procedure TZsspXMLWriterH.WriteTag(TagName: string; const IntValue: integer);
+begin
+  WriteTag(TagName, IntToStr(IntValue), True, False, False)
 end;
 
 procedure TZsspXMLWriterH.WriteTag(TagName: string; Text: string);
