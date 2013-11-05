@@ -94,6 +94,9 @@ type TZXMLSSave = class; CZXMLSSaveClass = class of TZXMLSSave;
         function ZipWith(const ZipGenerator: CZxZipGens): IZXMLSSave;
         function NoZip: IZXMLSSave;  // save to folder
 
+        function OnErrorRaise(): IZXMLSSave;
+        function OnErrorRetCode(): IZXMLSSave;
+
         /// returns zero on success, according to original
         ///     description for SaveXmlssToEXML
         function Save: integer;  overload;
@@ -113,10 +116,12 @@ type TZXMLSSave = class; CZXMLSSaveClass = class of TZXMLSSave;
         FZipGen: CZxZipGens;
 
         FDoNotDestroyMe: Boolean; // guard in case the user loses reference unexpectedly
+        FRaiseOnError: Boolean;
 
         function GetPageNumbers: TIntegerDynArray;
         function GetPageTitles:  TStringDynArray;
         function CreateSaverForDescription(const desc: string): IZXMLSSave;
+        procedure CheckSaveRetCode (Result: integer);
 
         {$IfOpt D+}
         function _AddRef: Integer; stdcall;
@@ -267,6 +272,7 @@ begin
   Self.FPath    := zxsaver.FPath;
   Self.fPages   := zxsaver.fPages;
   Self.FZipGen  := zxsaver.FZipGen;
+  Self.FRaiseOnError := zxsaver.FRaiseOnError;
 end;
 
 function TZXMLSSave.CreateSaverForDescription(const desc: String): IZXMLSSave;
@@ -392,9 +398,29 @@ begin
   Result := self;
 end;
 
+function TZXMLSSave.OnErrorRaise: IZXMLSSave;
+begin
+  Result := Self;
+  Self.FRaiseOnError := True;
+end;
+
+function TZXMLSSave.OnErrorRetCode: IZXMLSSave;
+begin
+  Result := Self;
+  Self.FRaiseOnError := False;
+end;
+
+procedure TZXMLSSave.CheckSaveRetCode(Result: integer);
+begin
+  if Result <> 0 then
+     if FRaiseOnError then
+        raise EZXSaveException.Create('Error #'+IntToStr(Result)+': cannot save ' + Self.FFile);
+end;
+
 function TZXMLSSave.Save(const FileName: TFileName): integer;
 begin
   Result := Self.ExportTo( FileName ).Save();
+  CheckSaveRetCode(Result);
 end;
 
 function TZXMLSSave.Save: integer;
@@ -414,6 +440,7 @@ begin
   end;
 
   Result := InternalSave;
+  CheckSaveRetCode(Result);
 end;
 
 function TZXMLSSave.InternalSave: integer;
