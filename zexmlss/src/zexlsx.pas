@@ -111,7 +111,8 @@ function ExportXmlssToXLSX(var XMLSS: TZEXMLSS; PathName: string; const SheetsNu
 
 //Дополнительные функции, на случай чтения отдельного файла
 function ZEXSLXReadTheme(var Stream: TStream; var ThemaFillsColors: TIntegerDynArray; var ThemaColorCount: integer): boolean;
-function ZEXSLXReadContentTypes(var Stream: TStream; var FileArray: TZXLSXFileArray; var FilesCount: integer): boolean;
+function ZEXSLXReadContentTypes(var Stream: TStream; var FileArray: TZXLSXFileArray; var FilesCount: integer): boolean; overload;
+function ZEXSLXReadContentTypes(var Stream: TStream; var FileArray: TZXLSXFileArray; var RelsExtension: string): boolean; overload;
 function ZEXSLXReadSharedStrings(var Stream: TStream; out StrArray: TStringDynArray; out StrCount: integer): boolean;
 function ZEXSLXReadStyles(var XMLSS: TZEXMLSS; var Stream: TStream; var ThemaFillsColors: TIntegerDynArray; var ThemaColorCount: integer): boolean;
 function ZE_XSLXReadRelationships(var Stream: TStream; var Relations: TZXLSXRelationsArray; var RelationsCount: integer; var isWorkSheet: boolean; needReplaceDelimiter: boolean): boolean;
@@ -147,7 +148,7 @@ implementation uses
 {$IfDef DELPHI_UNICODE}
   AnsiStrings,  // AnsiString targeted overloaded versions of Pos, Trim, etc
 {$EndIf}
-  StrUtils;
+  StrUtils, zeUnzi;
 
 type
   //шрифт
@@ -727,6 +728,41 @@ begin
   end;
 end; //ZEXSLXReadThema
 
+// Array of string can be destroyed in Delphi XE2
+const XLSXContentTypes: array [-2..9] of PChar = (  //TODO enumeration type
+ {def "bin"} 'application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings',
+ {def "xml"} 'application/xml',
+
+  {0: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml',
+  {1: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml',
+  {2: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml',
+  {3: s :=} 'application/vnd.openxmlformats-package.relationships+xml',
+  {4: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml',
+  {5: s :=} 'application/vnd.openxmlformats-package.core-properties+xml',
+  {6: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml',
+  {7: s :=} 'application/vnd.openxmlformats-officedocument.vmlDrawing',
+  {8: s :=} 'application/vnd.openxmlformats-officedocument.theme+xml',
+  {9: s :=} 'application/vnd.openxmlformats-officedocument.extended-properties+xml'
+);
+
+function XLSXGetFileType(const ContentType: string; const AllowNegative: boolean): integer;
+var i, t: integer;
+begin
+  if AllowNegative then begin
+    i := Low(XLSXContentTypes);
+  end else begin
+    i := 0;
+  end;
+  t := i - 1;
+
+  for i := i to High(XLSXContentTypes) do
+    if 0 = StrComp(PChar(ContentType), XLSXContentTypes[i]) then
+    begin
+      t := i;
+      break;
+    end;
+end;
+
 //Читает список нужных файлов из [Content_Types].xml
 //INPUT
 //  var Stream: TStream             - поток чтения
@@ -735,13 +771,21 @@ end; //ZEXSLXReadThema
 //RETURN
 //      boolean - true - всё прочиталось успешно
 function ZEXSLXReadContentTypes(var Stream: TStream; var FileArray: TZXLSXFileArray; var FilesCount: integer): boolean;
+var dummy: string;
+begin
+  result := ZEXSLXReadContentTypes(Stream, FileArray, dummy);
+  FilesCount := Length(FileArray);
+end;
+
+function ZEXSLXReadContentTypes(var Stream: TStream; var FileArray: TZXLSXFileArray; var RelsExtension: string): boolean;
 var
   xml: TZsspXMLReaderH;
-  s: string;
-  t: integer;
+  s, name: string;
+  i, t, FilesCount: integer;
 
 begin
   result := false;
+  RelsExtension := 'rels';
   xml := nil;
   try
     xml := TZsspXMLReaderH.Create();
@@ -752,49 +796,57 @@ begin
     while (not xml.Eof()) do
     begin
       xml.ReadTag();
-      if ((xml.TagName = 'Override') and (xml.TagType = 5)) then
+      if ((xml.TagName = 'Override') and ((xml.TagType or 1) = 5)) then // type = 4 suits too
       begin
-        s := xml.Attributes.ItemsByName['PartName'];
-        if (s > '') then
+        name := xml.Attributes.ItemsByName['PartName'];
+        if (name > '') then
         begin
-          SetLength(FileArray, FilesCount + 1);
-          FileArray[FilesCount].name := s;
-          FileArray[FilesCount].original := s;
           s := xml.Attributes.ItemsByName['ContentType'];
-          t := -1;
-          if (s = 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml') then
-            t := 0
-          else
-          if (s = 'application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml') then
-            t := 1
-          else
-          if (s = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml') then
-            t := 2
-          else
-          if (s = 'application/vnd.openxmlformats-package.relationships+xml') then
-            t := 3
-          else
-          if (s = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml') then
-            t := 4
-          else
-          if (s = 'application/vnd.openxmlformats-package.core-properties+xml') then
-            t := 5
-          else
-          if (s = 'application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml') then
-            t := 6
-          else
-          if (s = 'application/vnd.openxmlformats-officedocument.vmlDrawing') then
-            t := 7
-          else
-          if (s = 'application/vnd.openxmlformats-officedocument.theme+xml') then
-            t := 8;
+          t := XLSXGetFileType(s, False);
+//          t := -1;
+//          if (s = 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml') then
+//            t := 0
+//          else
+//          if (s = 'application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml') then
+//            t := 1
+//          else
+//          if (s = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml') then
+//            t := 2
+//          else
+//          if (s = 'application/vnd.openxmlformats-package.relationships+xml') then
+//            t := 3
+//          else
+//          if (s = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml') then
+//            t := 4
+//          else
+//          if (s = 'application/vnd.openxmlformats-package.core-properties+xml') then
+//            t := 5
+//          else
+//          if (s = 'application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml') then
+//            t := 6
+//          else
+//          if (s = 'application/vnd.openxmlformats-officedocument.vmlDrawing') then
+//            t := 7
+//          else
+//          if (s = 'application/vnd.openxmlformats-officedocument.theme+xml') then
+//            t := 8;
 
-          FileArray[FilesCount].ftype := t;
-
-          if (t > -1) then
+          if (t > -1) then begin
+            SetLength(FileArray, FilesCount + 1);
+            FileArray[FilesCount].ftype := t;
+            FileArray[FilesCount].name := name;
+            FileArray[FilesCount].original := name;
             inc(FilesCount);
+          end;
         end;
+      end else
+      if ((xml.TagName = 'Default') and ((xml.TagType or 1) = 5)) then // type = 4 suits too
+      begin
+         s := xml.Attributes.ItemsByName['ContentType'];
+         if 0 = StrComp(PChar(s), XLSXContentTypes[3]) then
+            RelsExtension := xml.Attributes.ItemsByName['Extension'];
       end;
+      // По хорошему надо для всех расширений/типов уметь учитывать умолчания
     end;
 
     result := true;
@@ -3231,21 +3283,6 @@ end; //ReadXLSX
 //RETURN
 //      integer
 
-const XLSXContentTypes: array [-2..8] of string = (  //TODO enumeration type
- {def "bin"} 'application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings',
- {def "xml"} 'application/xml',
-
-  {0: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml',
-  {1: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml',
-  {2: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml',
-  {3: s :=} 'application/vnd.openxmlformats-package.relationships+xml',
-  {4: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml',
-  {5: s :=} 'application/vnd.openxmlformats-package.core-properties+xml',
-  {6: s :=} 'application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml',
-  {7: s :=} 'application/vnd.openxmlformats-officedocument.vmlDrawing',
-  {8: s :=} 'application/vnd.openxmlformats-officedocument.extended-properties+xml'
-);
-
 function ZEXLSXCreateContentTypes(var XMLSS: TZEXMLSS; Stream: TStream; PageCount: integer;
                                     const PagesRels, PagesComments: TBooleanDynArray;
                                     const TextConverter: TAnsiToCPConverter; CodePageName: string; BOM: ansistring): integer;
@@ -3310,7 +3347,7 @@ var
     _WriteOverride('/xl/workbook.xml', 2);
     _WriteOverride('/xl/styles.xml', 1);
     _WriteOverride('/xl/sharedStrings.xml', 4);
-    _WriteOverride('/docProps/app.xml', 8);
+    _WriteOverride('/docProps/app.xml', 9);
     _WriteOverride('/docProps/core.xml', 5);
   end; //_WriteTypes
 
@@ -6404,6 +6441,255 @@ begin
 end; //SaveXmlssToXSLX
 
 {$ENDIF}
+
+
+function ImportXLSX(var XMLSS: TZEXMLSS; Source: zeUnzi.iuzFolder ): integer;
+var
+  i, j: integer;
+//  u_zip: TUnZipper;
+  lst: TStringList;
+  ZH: TXSLXZipHelper;
+  _no_sheets: boolean;
+
+//  procedure _getFile(num: integer);
+//  begin
+//    lst.Clear();
+//    lst.Add(ZH.FileArray[num].name); //список файлов
+//    u_zip.UnZipFiles(lst);
+//  end;
+
+  var DefaultRelsExtension: string; // content-types
+
+  function RelsFor(Document: iuzFile): iuzFile;
+  var f: iuzFolder; n: TFileName;
+  begin
+    Result := nil;
+
+    if Document = nil then exit;
+    f := Document.Parent; if f = nil then exit;
+
+    n := Document.Name;
+    n := '_rels' + PathDelim + '.' + DefaultRelsExtension;
+
+    Result := f.FileByPath(n); // can be nil
+  end;
+
+  //Пытается прочитать rel для листа
+  //INPUT
+  //     fnum: integer - Номер файла с листом
+  //RETURN
+  //      boolean - true - прочитал успешно
+  function _CheckSheetRelations(fnum: integer): boolean;
+  var
+    i, t, l: integer;
+    s, s1: string;
+
+  begin
+    ZH.ClearCurrentSheetRelations();
+    result := false;
+    s1 := '';
+    t := -1;
+    s := ZH.FileArray[fnum].original;
+    l := length(s);
+    for i := l downto 1 do
+      if (s[i] in ['/', '\']) then
+      begin
+        t := i + 1;
+        break;
+      end;
+    if (t > 0) then
+      s1 := copy(s, t, l - t + 1)
+    else
+      s1 := s;
+    if (s1 > '') then
+    begin
+      s1 := s1 + '.rels';
+      for i := 0 to ZH.ArchFilesCount - 1 do
+      if (i <> fnum) then
+        if (pos(s1, ZH.ArchFile[i]) <> 0) then
+        begin
+          ZH.AddToFiles(ZH.ArchFile[i], 99);
+          ZH.FileType := 111;
+          _getFile(ZH.FilesCount - 1);
+          break;
+        end;
+    end; //if
+  end; //_CheckSheetRelations
+
+  //Прочитать примечания
+  procedure _ReadComments();
+  var
+    _num: integer;
+
+  begin
+    if (ZH.isNeedReadComments) then
+    begin
+      _num := ZH.GetCurrentPageCommentsNumber();
+      if (_num >= 0) then
+      begin
+        ZH.FileType := 113;
+        _getFile(i);
+      end;
+    end;
+  end; //_ReadComments
+
+begin
+  result := 0;
+
+  if (not Assigned(Source)) or (not Assigned(XMLSS)) then
+  begin
+    result := -1;
+    exit;
+  end;
+
+  XMLSS.Styles.Clear();
+  XMLSS.Sheets.Count := 0;
+
+  lst := nil;
+  ZH := nil;
+
+  try
+    try
+      lst := TStringList.Create();
+      lst.Clear();
+      lst.Add('[Content_Types].xml'); //список файлов
+      ZH := TXSLXZipHelper.Create();
+      ZH.XMLSS := XMLSS;
+//      u_zip := TUnZipper.Create();
+//      u_zip.FileName := FileName;
+//
+//      u_zip.Examine();
+
+      for i := 0 to u_zip.Entries.Count - 1 do
+        ZH.AddArchFile(u_zip.Entries[i].ArchiveFileName);
+
+      u_zip.OnCreateStream := @ZH.DoCreateOutZipStream;
+      u_zip.OnDoneStream := @ZH.DoDoneOutZipStream;
+      ZH.FileType := -2;
+      u_zip.UnZipFiles(lst);
+      if (ZH.RetCode <> 0) then
+      begin
+        result := ZH.RetCode;
+        exit;
+      end;
+
+      ZH.FileType := 3;
+      for i := 0 to ZH.FilesCount - 1 do
+      if (ZH.FileArray[i].ftype = 3) then
+      begin
+        ZH.FileNumber := i;
+        _getFile(i);
+        if (ZH.RetCode <> 0) then
+        begin
+          result := ZH.RetCode;
+          exit;
+        end;
+      end;
+
+      //sharedStrings.xml
+      ZH.FileType := 4;
+      for i:= 0 to ZH.FilesCount - 1 do
+      if (ZH.FileArray[i].ftype = 4) then
+      begin
+        _getFile(i);
+        if (ZH.RetCode <> 0) then
+        begin
+          result := ZH.RetCode;
+          exit;
+        end;
+        break;
+      end;
+
+      //тема (если есть)
+      ZH.FileType := 5;
+      for i := 0 to ZH.FilesCount - 1 do
+      if (ZH.FileArray[i].ftype = 8) then
+      begin
+        _getFile(i);
+        if (ZH.RetCode <> 0) then
+        begin
+          result := ZH.RetCode;
+          exit;
+        end;
+        break;
+      end;
+
+      //стили (styles.xml)
+      ZH.FileType := 1;
+      for i := 0 to ZH.FilesCount - 1 do
+      if (ZH.FileArray[i].ftype = 1) then
+      begin
+        _getFile(i);
+        if (ZH.RetCode <> 0) then
+        begin
+          result := ZH.RetCode;
+          exit;
+        end;
+      end;
+
+      _no_sheets := true;
+      //чтение страниц
+      if (ZH.SheetRelationNumber > 0) then
+      begin
+        ZH.FileType := 2;
+        for i := 0 to ZH.FilesCount - 1 do
+        if (ZH.FileArray[i].ftype = 2) then
+        begin
+          _getFile(i);
+          if (ZH.RetCode <> 0) then
+          begin
+            result := ZH.RetCode;
+            exit;
+          end;
+          break;
+        end; //if
+
+        for i := 1 to ZH.RelationsCounts[ZH.SheetRelationNumber] do
+        for j := 0 to ZH.RelationsCounts[ZH.SheetRelationNumber] - 1 do
+        if (ZH.RelationsArray[ZH.SheetRelationNumber][j].sheetid = i) then
+        begin
+          ZH.ListName := ZH.RelationsArray[ZH.SheetRelationNumber][j].name;
+
+          _CheckSheetRelations(ZH.RelationsArray[ZH.SheetRelationNumber][j].fileid);
+
+          ZH.FileType := 0;
+          _getFile(ZH.RelationsArray[ZH.SheetRelationNumber][j].fileid);
+          if (ZH.RetCode <> 0) then
+            result := result or ZH.RetCode;
+          _ReadComments();
+          _no_sheets := false;
+        end; //if
+      end;
+      if (_no_sheets) then
+      begin
+        i := 0;
+        while (i < ZH.FilesCount) do
+        begin
+          if (ZH.FileArray[i].ftype = 0) then
+          begin
+            _CheckSheetRelations(i);
+            ZH.FileType := 0;
+            _getFile(i);
+            if (ZH.RetCode <> 0) then
+              result := result or ZH.RetCode;
+           _ReadComments();
+          end;
+          inc(i)
+        end; //while
+      end;
+    except
+      result := 2;
+    end;
+  finally
+    if (Assigned(u_zip)) then
+      FreeAndNil(u_zip);
+    if (Assigned(lst)) then
+       FreeAndNil(lst);
+    if (Assigned(ZH)) then
+       FreeAndNil(ZH);
+  end;
+end; //ReadXLSX
+
 
 //Перепутал малость названия ^_^
 
