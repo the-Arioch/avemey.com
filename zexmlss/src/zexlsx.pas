@@ -1709,9 +1709,10 @@ var
         begin
           BorderArray[_currBorder][borderNum].style := ZEContinuous;
         end else
-        if (s = 'hair') then
-          BorderArray[_currBorder][borderNum].style := ZEContinuous
-        else
+        if (s = 'hair') then begin // XML-SS defines Weight==0 for "hairline" whatever it means
+          BorderArray[_currBorder][borderNum].style := ZEContinuous;
+          BorderArray[_currBorder][borderNum].width := 0;
+        end else
         if (s = 'dashed') then
           BorderArray[_currBorder][borderNum].style := ZEDash
         else
@@ -4563,11 +4564,11 @@ var brd: TZBorder;
     end;
     _border := brd[BorderNum];
     s1 := '';
-    if _border.Weight > 0 then
     case _border.LineStyle of
       ZEContinuous:
        case _border.Weight of
-           1: s1 := 'thin'; // 'hair' is dashed - " -  -  -  -  - "
+           0: s1 := 'hair'; // Hair is dotted by XLSX ECMA picture
+           1: s1 := 'thin';
            2: s1 := 'medium';
          else s1 := 'thick';
         end;
@@ -5371,18 +5372,15 @@ var
     end;
     _border := XMLSS.Styles[StyleNum].Border[BorderNum];
     s1 := '';
-    if _border.Weight > 0 then
     case _border.LineStyle of
       ZEContinuous:
         begin
-          //thin ??
-          if (_border.Weight = 1) then
-            s1 := 'thin' // 'hair'
-          else
-          if (_border.Weight = 2) then
-            s1 := 'medium'
-          else
-            s1 := 'thick';
+          case _border.Weight of
+            0: s1 := 'hair';
+            1: s1 := 'thin';
+            2: s1 := 'medium';
+            3: s1 := 'thick';
+            else ; // make compiler happy
         end;
       ZEDash:
         begin
@@ -6442,6 +6440,7 @@ end; //SaveXmlssToXSLX
 
 {$ENDIF}
 
+{$IFDEF FPC}
 
 function ImportXLSX(var XMLSS: TZEXMLSS; Source: zeUnzi.iuzFolder ): integer;
 var
@@ -6690,6 +6689,7 @@ begin
   end;
 end; //ReadXLSX
 
+{$EndIf}
 
 //Перепутал малость названия ^_^
 
