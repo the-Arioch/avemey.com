@@ -3434,11 +3434,23 @@ begin
   item.zrow := zrow;
 
   a := trim(author);
-  if a  = '' then item.AuthorId := -1 else begin
+//  ISO/IEC 29500-1:2011(E)
+//  18.7.1 author (Author)
+//    This element holds a string representing the name of a single author of comments.
+//    Every comment shall have an author.
+//  18.7.3 comment (Comment)
+//    authorId (AuthorId)
+//    Required. An unsigned integer which is used as the zero based index into the list of
+//    authors for this set of comments.
+
+//  Excel 2010 just discards comments lacking authorId (but tolerates empty-string Author)
+//  Удаленный компонент: часть /xl/comments1.xml с ошибкой XML.  (Примечания) Ошибка загрузки. Строка 2, столбец 139.
+
+//  if a  = '' then item.AuthorId := -1 else begin
     item.AuthorId := Authors.IndexOf(a); // case-insensitive, but that is typical for Win/Office
     if item.AuthorId < 0 then
        item.AuthorId := Authors.Add(a);
-  end;
+//  end;
 end;
 
 procedure TZXLSXCommentsStore.BeforeDestruction;
