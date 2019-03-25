@@ -146,6 +146,7 @@ function ZEXLSXNewRelations(datasink: TStream; TextConverter: TAnsiToCPConverter
 implementation uses
 {$IfDef DELPHI_UNICODE}
   AnsiStrings,  // AnsiString targeted overloaded versions of Pos, Trim, etc
+  UITypes,    //  TColorRec record
 {$EndIf}
   StrUtils;
 
@@ -165,23 +166,46 @@ type
   TZEXLSXFontArray = array of TZEXLSXFont; //массив шрифтов
 
 // hex number, ARGB format, Alpha = 255 for opaque colors
+// 1) W3C's xmlBinary data type should be BYTES dump, not Int32's dump????
+// 2) VCL TColor and Windows Color have RGB in *reversed* order!
+// Empty cell with R=100, G=10, B=1 backgrouns is saved as
+//   <patternFill patternType="solid"><fgColor rgb="FF640A01"/><bgColor indexed="64"/></patternFill>
+
+function ColorFromXLSX(S: string): TColor; forward;
+
 function ColorToXLSX(Color: TColor): string;
 var
   _RGB: integer;
+  _xml: LongRec absolute _RGB;
+  _rec: TColorRec absolute Color;
 begin
+  Result := 'ff' + IntToHex(_rec.R, 2) + IntToHex(_rec.G, 2) + IntToHex(_rec.B, 2);
+(*
   _RGB := ColorToRGB(Color) or $ff000000;
-  Result := IntToHex(_RGB, 8);
+  Result := IntToHex(_xml.Bytes[2], 2) + IntToHex(_xml.Bytes[1], 2)
+          + IntToHex(_xml.Bytes[0], 2) + IntToHex(_xml.Bytes[3], 2);
+*)
+  Assert(ColorFromXLSX(Result)=ColorToRGB(Color));
 end;
 
 // VCL Color does not have transparency, so ignoring alpha channel
 //    To think: extra parameter "background color" and blend ?
 //    Could help for certain cells, but would not help for styles.
 function ColorFromXLSX(S: string): TColor;
+var _xml: LongRec absolute Result;
+    i: integer;
+    h: string;
 begin
   Result := 0;
   if S > '' then begin
      if S[1] = '#' then Delete(S, 1, 1);
-     Result := StrToIntDef('$'+S, 0) and $00ffFFff;
+     Delete(S, 1, 2);  // alpha-transparency - ignore, set 0 for VCL TColor
+     h := '$00';
+     for i := 0 to 2 do begin
+       h[2] := s[(2*i)+1];
+       h[3] := s[2*(i+1)];
+       _xml.Bytes[i] := StrToIntDef(h, 0);
+     end;
   end;
 end;
 
@@ -1418,6 +1442,7 @@ type
   TZXLSXCellStyle = record
     applyAlignment: boolean;
     applyBorder: boolean;
+    applyFill: boolean;
     applyFont: boolean;
     applyProtection: boolean;
     borderId: integer;
@@ -2027,6 +2052,10 @@ var
         if (s > '') then
           CSA[_currCell].applyFont := ZEStrToBoolean(s);
 
+        s := xml.Attributes.ItemsByName['applyFill'];
+        if (s > '') then
+          CSA[_currCell].applyFill := ZEStrToBoolean(s);
+
         s := xml.Attributes.ItemsByName['applyProtection'];
         if (s > '') then
           CSA[_currCell].applyProtection := ZEStrToBoolean(s);
@@ -2278,12 +2307,15 @@ var
       XMLSSStyle.HideFormula := XLSXStyle.hidden;
     end;
 
-    n := XLSXStyle.fillId;
-    if ((n >= 0) and (n < FillCount)) then
+    if (XLSXStyle.applyFill) then
     begin
-      XMLSSStyle.CellPattern := FillArray[n].patternfill;
-      XMLSSStyle.BGColor := FillArray[n].bgcolor;
-      XMLSSStyle.PatternColor := FillArray[n].patterncolor;
+      n := XLSXStyle.fillId;
+      if ((n >= 0) and (n < FillCount)) then
+      begin
+        XMLSSStyle.CellPattern := FillArray[n].patternfill;
+        XMLSSStyle.BGColor := FillArray[n].bgcolor;
+        XMLSSStyle.PatternColor := FillArray[n].patterncolor;
+      end;
     end;
   end; //_ApplyStyle
 
@@ -4881,6 +4913,7 @@ var
     xml.Attributes.Add('borderId', IntToStr( _map[i].Border ), false);
 
     xml.Attributes.Add('fillId', IntToStr( _map[i].Fill), false);
+    xml.Attributes.Add('applyFill', 'true', false);
 
     xml.Attributes.Add('applyFont', 'true', false);
     xml.Attributes.Add('fontId', IntToStr( _map[i].Font), false);
@@ -5487,6 +5520,7 @@ var
     _xml.Attributes.Add('applyAlignment', XLSXBoolToStr(_addalignment));
     _xml.Attributes.Add('applyBorder', 'true', false);
     _xml.Attributes.Add('applyFont', 'true', false);
+    _xml.Attributes.Add('applyFill', 'true', false);
     _xml.Attributes.Add('applyProtection', 'true', false);
     _xml.Attributes.Add('borderId', IntToStr(_BorderIndex[NumStyle + 1]), false);
     _xml.Attributes.Add('fillId', IntToStr(_FillIndex[NumStyle + 1] + 2), false); //+2 т.к. первыми всегда идут 2 левых стиля заливки
