@@ -1969,8 +1969,12 @@ var
   end;
 
   function IfTag(const TgName: string; const TgType: integer): boolean;
+  var s: string; i: integer;
   begin
-    result := (_xml.TagName = TgName) and (_xml.TagType = TgType);
+    s := _xml.TagName;
+    i := Pos(':', s);
+    if i > 0 then Delete(s, 1, i);
+    result := (s = TgName) and (_xml.TagType = TgType);
   end;
 
   //<Style> ... </Style>
