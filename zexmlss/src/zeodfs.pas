@@ -1439,6 +1439,7 @@ var
           else
             // всё остальное считаем строкой (потом подправить, возможно, добавить новые типы)
             {ZEansistring ZEError ZEDateTime}
+			ss := 'string';
         end;
         if (ss > '') then
           _xml.Attributes.Add('office:value-type', ss, false);
