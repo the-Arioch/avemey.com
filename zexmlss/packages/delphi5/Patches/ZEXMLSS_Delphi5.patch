@@ -1,0 +1,851 @@
+--- examples/createexml/createexml.dpr	Tue Jan 22 15:53:24 2013
++++ examples/createexml/createexml.dpr	Wed Sep 29 23:57:40 2021
+@@ -2,7 +2,8 @@
+ 
+ uses
+   Forms,
+-  unit_main in 'unit_main.pas' {frmMain};
++  unit_main in 'unit_main.pas' {frmMain},
++  zeZippyTV in '..\..\src\zeZippyTV.pas';
+ 
+ {$R *.res}
+ 
+--- examples/createexml/unit_main.dfm	Wed Feb  6 19:06:52 2013
++++ examples/createexml/unit_main.dfm	Wed Sep 29 20:16:14 2021
+@@ -1,31 +1,27 @@
+ object frmMain: TfrmMain
+-  Left = 454
+-  Top = 237
++  Left = 373
++  Top = 166
+   BorderIcons = [biSystemMenu, biMinimize]
+   BorderStyle = bsSingle
+-  Caption = #1055#1088#1080#1084#1077#1088' '#1080#1089#1087#1086#1083#1100#1079#1086#1074#1072#1085#1080#1103' EXMLSS'
+-  ClientHeight = 523
+-  ClientWidth = 961
++  Caption = 'Пример использования EXMLSS'
++  ClientHeight = 425
++  ClientWidth = 781
+   Color = clBtnFace
+   Font.Charset = DEFAULT_CHARSET
+   Font.Color = clWindowText
+-  Font.Height = -14
++  Font.Height = -11
+   Font.Name = 'MS Sans Serif'
+   Font.Style = []
+-  OldCreateOrder = False
+-  Position = poScreenCenter
+-  PixelsPerInch = 120
+-  TextHeight = 16
++  OldCreateOrder = True
++  Position = poDesktopCenter
++  PixelsPerInch = 96
++  TextHeight = 13
+   object btnCreate: TButton
+-    Left = 226
+-    Top = 197
+-    Width = 405
+-    Height = 90
+-    Margins.Left = 4
+-    Margins.Top = 4
+-    Margins.Right = 4
+-    Margins.Bottom = 4
+-    Caption = #1057#1086#1079#1076#1072#1090#1100' '#1092#1072#1081#1083' Microsoft Excel/OpenOffice.org'
++    Left = 272
++    Top = 160
++    Width = 241
++    Height = 73
++    Caption = 'Создать файл ODS, XLSX, Excel XML'
+     TabOrder = 0
+     OnClick = btnCreateClick
+   end
+--- examples/createexml/unit_main.pas	Sat Feb 23 23:39:42 2013
++++ examples/createexml/unit_main.pas	Wed Sep 29 21:13:48 2021
+@@ -6,13 +6,15 @@
+   {$MODE Delphi}
+ {$ENDIF}
+ 
++{$I CompVer.inc}
++
+ interface
+ 
+ uses
+   {$IFDEF FPC}
+   LCLIntf, LResources,
+   {$ELSE}
+-  Windows, Messages, Variants,
++  Windows, Messages, {$IfNDef VER130} Variants, {$EndIf}
+   {$ENDIF}
+   StdCtrls,  SysUtils, Dialogs, Classes, Graphics, Controls, Forms,
+   zexmlss, zexmlssutils, zsspxml, zeformula, StrUtils;
+@@ -37,7 +39,12 @@
+ uses
+  {$IfDef Unicode} AnsiStrings, {$EndIf} TypInfo,
+  {$IFNDEF FPC}
+- {$IF CompilerVersion > 22}zeZippyXE2, {$ELSE} zeZippyAB,{у кого чего стоит} {$IFEND} //<XE2 have not zip!
++ {$IFDEF VER130}
++ duansistr,
++ zeZippyTV, 
++ {$ELSE}
++// {$IF CompilerVersion > 22}zeZippyXE2, {$ELSE} zeZippyAB,{у кого чего стоит} {$IFEND} //<XE2 have not zip!
++ {$EndIf}
+  {$Else} zeZippyLaz,{$EndIf}
+ zeSave, zeSaveODS, zeSaveXLSX, zeSaveEXML;
+ {$IFNDEF FPC}
+@@ -65,9 +72,11 @@
+ begin
+   TextConverter := nil;
+   {$IFNDEF FPC}
+-    {$IF CompilerVersion < 20} // < RAD Studio 2009
++    {$IfNDef DELPHI_UNICODE}
++//    {$IF CompilerVersion < 20} // < RAD Studio 2009
+   TextConverter := @my_local_to_some_encoding;
+-    {$IFEND}
++//    {$IFEND}
++    {$ENDIF}
+   {$ENDIF}
+   sd := TSaveDialog.Create(nil);
+   sd.Filter := 'Excel XML 2002 (*.xml)|*.xml|OpenDocument|*.ods;*.fods|Office OpenXML|*.xlsx;*.xlsm';
+--- packages/delphi5/zexmlsslib.dpk	Sun Feb 17 17:11:10 2013
++++ packages/delphi5/zexmlsslib.dpk	Wed Sep 29 19:03:50 2021
+@@ -22,12 +22,13 @@
+ {$VARSTRINGCHECKS ON}
+ {$WRITEABLECONST ON}
+ {$MINENUMSIZE 1}
+-{$DESCRIPTION 'ZEXMLSS component'}
+ {$IMAGEBASE $400000}
++{$DESCRIPTION 'ZEXMLSS component'}
+ {$IMPLICITBUILD ON}
+ 
+ requires
+-  vcl50;
++  vcl50,
++  Vclx50;
+ 
+ contains
+   zexmlss in '..\..\src\zexmlss.pas',
+@@ -37,6 +38,8 @@
+   zeformula in '..\..\src\zeformula.pas',
+   zexmlssutils in '..\..\src\zexmlssutils.pas',
+   zearchhelper in '..\..\src\zearchhelper.pas',
+-  zexlsx in '..\..\src\zexlsx.pas';
++  zexlsx in '..\..\src\zexlsx.pas',
++  zeZippy in '..\..\src\zeZippy.pas',
++  duansistr in '..\..\src\duansistr.pas';
+ 
+ end.
+--- src/duansistr.pas	Tue Jan 22 15:53:24 2013
++++ src/duansistr.pas	Wed Sep 29 23:08:26 2021
+@@ -9,12 +9,54 @@
+ 
+ unit duansistr;
+ 
++{$IFDEF VER130} // to be moved into compver.h ???
++{$Define UnicodeBeforeDelphi7 }
++{$EndIf}
++{$IFDEF VER140} // Is this also needed in Delphi/BCB 6 ?
++{$Define UnicodeBeforeDelphi7 }
++{$EndIf}
++
+ interface
+ 
++{$IfDef UnicodeBeforeDelphi7 }
++uses Graphics;
++
++function Utf8ToAnsi(const u8src: ansistring): ansistring;
++function AnsiToUtf8(const WinSrc: ansistring): ansistring;
++function WideCharToString(const u16src: WideString): ansistring;
++function IfThen(const Choice: boolean; const TrueStr: string; const FalseStr: string = ''): string;
++function AnsiEndsStr(const mini, maxi: string): boolean;
++function AnsiEndsText(const mini, maxi: string): boolean;
++function TryStrToFloat(const num: string; out flo: double): boolean;
++function TryStrToInt(const num: string; out int: integer): boolean;
++// function GetEnvironmentVariable(const name: string): string;
++function RightStr(const from: string; const len: integer): string;
++
++const sLineBreak = #13#10; PathDelim = '\';
++
++type
++  TColorRec = packed record
++  case byte of
++    0: (Color: TColor);
++    1: (R, G, B, Special: Byte);
++  end;
++
++  LongRec = packed record
++  case byte of
++    0: (Lo, Hi: Word);
++    1: (Bytes: array [0..3] of Byte); // missed in Delphi 5
++  end;
++
++{$EndIf}
++
+ function DUAnsiPos(const Substr: ansistring; const S: ansistring): integer;
+ 
+ implementation
+ 
++{$IfDef UnicodeBeforeDelphi7 }
++uses Windows, SysUtils;
++{$EndIf }
++
+ function DUAnsiPos(const Substr: ansistring; const S: ansistring): integer;
+ var
+   i, j: integer;
+@@ -45,5 +87,136 @@
+       end;
+     end;
+ end;
++
++{$IfDef UnicodeBeforeDelphi7 }
++const CP_SYMBOL = 42; // Delphi 5 misses it...
++
++function WideStringToString(const ws: WideString; codePage: Word): AnsiString;
++var
++  l: integer;
++  Flags: DWORD;
++begin
++  if ws = '' then
++    Result := ''
++else
++  begin
++    if (codePage > 50220) or (codePage = CP_SYMBOL)
++      then Flags := 0
++      else Flags := WC_COMPOSITECHECK or WC_DISCARDNS or WC_SEPCHARS or WC_DEFAULTCHAR;
++    l := WideCharToMultiByte(codePage,
++      Flags,
++      @ws[1], -1, nil, 0, nil, nil);
++    SetLength(Result, l - 1);
++    if l > 1 then
++      WideCharToMultiByte(codePage,
++        Flags,
++        @ws[1], -1, @Result[1], l - 1, nil, nil);
++  end;
++end; { WideStringToString }
++
++function StringToWideString(const s: AnsiString; codePage: Word): WideString;
++var
++  l: integer;
++begin
++  if s = '' then
++    Result := ''
++else
++  begin
++    l := MultiByteToWideChar(codePage, MB_PRECOMPOSED, PChar(@s[1]), -1, nil,
++      0);
++    SetLength(Result, l - 1);
++    if l > 1 then
++      MultiByteToWideChar(CodePage, MB_PRECOMPOSED, PChar(@s[1]),
++        -1, PWideChar(@Result[1]), l - 1);
++  end;
++end; { StringToWideString }
++
++// used in CreateEXML example application
++function AnsiToUtf8(const WinSrc: ansistring): ansistring;
++var intermed: WideString;
++begin
++  intermed := StringToWideString( WinSrc, CP_ACP );
++  Result := WideStringToString( intermed, CP_UTF8 );
++end;
++
++function Utf8ToAnsi(const u8src: ansistring): ansistring;
++var intermed: WideString;
++begin
++  intermed := StringToWideString( u8src, CP_UTF8 );
++  Result := WideCharToString( intermed );
++end;
++
++function WideCharToString(const u16src: WideString): ansistring;
++begin
++  Result := WideStringToString(u16src, CP_ACP);
++end;
++
++function IfThen(const Choice: boolean; const TrueStr: string; const FalseStr: string = ''): string;
++begin
++  if Choice
++     then Result := TrueStr
++     else Result := FalseStr;
++end;
++
++function RightStr(const from: string; const len: integer): string;
++var  s: integer;
++begin
++  if len <= 0 then begin
++     Result := '';
++     exit;
++  end;
++  s := length(from) - len;
++  if s <= 0 then begin
++     Result := from;
++     exit;
++  end;
++  Inc(s);
++  Result := Copy(from, s, len);
++end;
++
++function AnsiEndsStr(const mini, maxi: string): boolean;
++begin
++  Result :=
++    (Length(mini) <= Length(maxi)) and
++    (RightStr(maxi, Length(mini)) = mini);
++end;
++
++function AnsiEndsText(const mini, maxi: string): boolean;
++begin
++  Result := AnsiEndsStr( AnsiUpperCase(mini), AnsiUpperCase(maxi) );
++end;
++
++function TryStrToFloat(const num: string; out flo: double): boolean;
++begin
++  Result := False;
++end;
++
++function TryStrToInt(const num: string; out int: integer): boolean;
++begin
++  Result := False;
++end;
++
++(***   Windows library should not use it for temp-folder in the first place...
++function GetEnvironmentVariable(const name: string): string;
++var len: cardinal;
++    buff: array of char; // MSDN: GetEnvironmentVariable coutns in chars not in bytes
++    ch1: PChar;
++begin
++  Result := '';
++  len := Windows.GetEnvironmentVariable( PChar(name), nil, 0 );
++  if integer(len) <= 0 then
++     exit;
++  SetLength(buff, len);
++  ch1 := @buff[ Low(buff) ];
++  len := Windows.GetEnvironmentVariable( PChar(name), ch1, len );
++  if integer(len) <= 0 then
++     exit;
++  if len > cardinal(length(buff)) then
++     exit; // maybe error? some bad MS API fault or something
++  Result := ch1;
++end;
++***)
++
++{$EndIf}
+ 
+ end.
+--- src/zearchhelper.pas	Thu Feb 14 16:39:40 2013
++++ src/zearchhelper.pas	Wed Sep 29 23:25:36 2021
+@@ -34,21 +34,47 @@
+ interface
+ 
+ uses
++{$IfNDef FPC}
++  Windows,
++{$EndIf}  
+   sysutils;
+ 
+-function ZEGetTempDir(): string;
++function ZEGetTempDir(): string;  // is it even ever used ANYWHERE ???
+ function ZECreateUniqueTmpDir(const ADir: string; var retTmpDir: string): boolean;
+ function ZEDelTree(ADir: string): boolean;
+ 
+ implementation
++{$IFDEF VER130}
++uses
++//  sysd7
++  duansistr, FileCtrl;
++{$ENDIF}
+ 
+ //Получает путь к темпу
+ function ZEGetTempDir(): string;
++{$IfNDef FPC}
++var
++  buff: array of char; // MSDN: GetTempPath counts in chars not bytes
++  ch1: PChar;
++  len: DWORD;
++{$EndIf}
+ begin
+   {$IFDEF FPC}
+   result := GetTempDir();
+   {$ELSE}
+-  result := GetEnvironmentVariable('TEMP');
++//  result := GetEnvironmentVariable('TEMP'); or 'TMP' ??? Or just use Win32 API?
++  len := GetTempPath(0, nil);
++  if 0 = len then
++     RaiseLastWin32Error;
++  if integer(len) < 0 then // NT Kernel UNICODE_STRING record limits filename with 32KBytes = 16KChars
++     raise EWin32Error.Create('Impossibly long file name for temporary files folder.');
++  Inc(len);  // MSDN infers the length here would be enough for trailing $0 but better safe than sorry
++  SetLength(buff, len);
++  ch1 := @buff[ Low(buff) ];
++  len := GetTempPath(len, ch1);
++  if 0 = len then
++     RaiseLastWin32Error;
++  Result := ch1;
+   {$ENDIF}
+ end;
+ 
+@@ -124,6 +150,11 @@
+   end;
+ 
+ begin
++  Result := False;
++  if ADir = '' then exit;
++  if not DirectoryExists(ADir) then exit;
++  if ADir[length(ADir)] <> PathDelim then
++     ADir := ADir + PathDelim;
+   result := _DelTree(ADir{''});
+ end;
+ 
+--- src/zeformula.pas	Tue Nov  5 02:16:54 2013
++++ src/zeformula.pas	Wed Sep 29 17:35:20 2021
+@@ -64,7 +64,10 @@
+ function ZEGetCellCoords(const cell: string; var column, row: integer; StartZero: boolean = true): boolean;
+ 
+ implementation
+-
++{$IfDef VER130}
++uses duansistr;
++{$EndIf} 
++        
+ const
+   ZE_STR_ARRAY: array [0..25] of char = ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z');
+ 
+--- src/zeodfs.pas	Wed Feb 12 11:49:02 2020
++++ src/zeodfs.pas	Wed Sep 29 18:08:40 2021
+@@ -45,7 +45,7 @@
+ {$ENDIF}
+ 
+ uses
+-  SysUtils, Graphics, Classes, Types, 
++  SysUtils, Graphics, Classes, {$IfNDef VER130} Types, {$EndIf}
+   zsspxml, zexmlss, zesavecommon, zeZippy
+   {$IFDEF FPC},zipper{$ENDIF};
+ 
+@@ -95,7 +95,13 @@
+ function ReadODFSettings(var XMLSS: TZEXMLSS; stream: TStream): boolean;
+ 
+ implementation
+-uses StrUtils;
++uses
++{$IfDef VER130}
++  duansistr,
++  FileCtrl;  // func ForceDirectories, DirectoryExists
++{$Else}  
++  StrUtils
++{$EndIf}
+ 
+ const
+   ZETag_StyleFontFace       = 'style:font-face';      // ODS v.1.2  ch.16.21 <style:font-face>
+--- src/zeSave.pas	Tue Mar 11 18:25:38 2014
++++ src/zeSave.pas	Wed Sep 29 20:32:04 2021
+@@ -5,10 +5,22 @@
+    (c) the Arioch, licensed under zLib license *)
+ unit zeSave;
+ 
+-interface uses zexmlss,  zsspxml, zeZippy, sysutils, classes, Types;
++interface uses zexmlss,  zsspxml, zeZippy, sysutils, classes,
++{$IfNDef VER130}
++  Types
++{$Else}
++  zesavecommon // type TStringDynArray, TIntegerDynArray
++{$EndIf}
++;
+ 
+ type TZxPageInfo = record name: string; no: integer; end;
+ 
++{$IfDef VER130}
++  TIntegerDynArray = zesavecommon.TIntegerDynArray;
++  TStringDynArray = zesavecommon.TStringDynArray;
++{$EndIf}
++
++
+ type IZXMLSSave = interface
+         function ExportFormat(const fmt: string): IZXMLSSave;
+         function As_(const fmt: string): IZXMLSSave;
+@@ -144,6 +156,9 @@
+ 
+ implementation
+ uses
++{$IfDef VER130}
++   FileCtrl, // ForceDirectories, etc
++{$EndIf}
+ {$IfDef MSWINDOWS}Registry, Windows, {$EndIf}
+   Contnrs {$IfNDef FPC}{$IfDef Delphi_Unicode}, AnsiStrings{$EndIf}{$EndIf};
+ 
+--- src/zesavecommon.pas	Tue Nov  5 02:16:54 2013
++++ src/zesavecommon.pas	Wed Sep 29 17:51:26 2021
+@@ -22,14 +22,27 @@
+ {$ENDIF}
+ 
+ uses
+-  SysUtils, Types, zexmlss, zsspxml;
++  SysUtils, {$IfNDef VER130} Types,{$EndIf} zexmlss, zsspxml;
+ 
+ const
+   ZE_MMinInch: real = 25.4;
+ 
++{$IFDEF VER130} // to be moved into compver.h ???
++{$Define TypesBeforeDelphi7 }
++{$EndIf}
++{$IFDEF VER140} // Is this also needed in Delphi/BCB 6 ?
++{$Define TypesBeforeDelphi7 }
++{$EndIf}
++
+ //type
+ //  TZESaveIntArray = array of integer; // Since Delphi 7 and FPC 2005 - TIntegerDynArray
+ //  TZESaveStrArray = array of string;  // Since Delphi 7 and FPC 2005 - TStringDynArray
++{$IfDef TypesBeforeDelphi7 }
++type
++  TIntegerDynArray = array of integer;
++  TStringDynArray = array of string;
++  TBooleanDynArray = array of boolean;  
++{$EndIf}
+ 
+ //Попытка преобразовать строку в число
+ function ZETryStrToFloat(const st: string; valueIfError: double = 0): double;
+@@ -80,6 +93,14 @@
+ const ZELibraryVersion = '0.0.6';
+       ZELibraryFork = 'Arioch';// or empty str   // URL ?
+ implementation
++
++{$IfDef TypesBeforeDelphi7}
++uses
++  FileCtrl; // func DirectoryExists
++
++const
++  PathDelim = '\';
++{$EndIf}  
+ 
+ function ZELibraryName: string;
+ begin   // todo: compiler version and date ?
+--- src/zeSaveEXML.pas	Sat Feb  2 20:11:52 2013
++++ src/zeSaveEXML.pas	Wed Sep 29 20:33:12 2021
+@@ -8,7 +8,7 @@
+ interface
+ 
+ implementation
+-uses zeSave, zexmlss, Types, zexmlssutils;
++uses zeSave, zexmlss, {$IfNDef VER130} Types, {$EndIf} zexmlssutils;
+ 
+ type TZxXMLSSSaver = class(TZXMLSSave)
+      protected
+--- src/zeSaveODS.pas	Sat Feb  2 20:11:52 2013
++++ src/zeSaveODS.pas	Wed Sep 29 20:28:36 2021
+@@ -8,7 +8,7 @@
+ interface
+ 
+ implementation
+-uses zeSave, zexmlss, zeodfs, Types,
++uses zeSave, zexmlss, zeodfs, {$IfNDef VER130} Types, {$EndIf}
+ {$IfDef Delphi_Unicode}
+   StrUtils;
+ {$Else}      // SplitString
+--- src/zeSaveXLSX.pas	Sat Feb  2 20:11:52 2013
++++ src/zeSaveXLSX.pas	Wed Sep 29 20:32:26 2021
+@@ -8,7 +8,7 @@
+ interface
+ 
+ implementation
+-uses zeSave, zexmlss, zexlsx, Types,
++uses zeSave, zexmlss, zexlsx, {$IfNDef VER130} Types, {$EndIf}
+ {$IfDef Delphi_Unicode}
+   StrUtils;
+ {$Else}       // SplitString
+--- src/zexlsx.pas	Wed Feb 12 12:01:09 2020
++++ src/zexlsx.pas	Wed Sep 29 18:05:58 2021
+@@ -52,7 +52,7 @@
+ {$ENDIF}
+ 
+ uses
+-  SysUtils, Classes, Types, Graphics,
++  SysUtils, Classes, {$IfNDef VER130} Types,{$EndIf} Graphics,
+   zeformula, zsspxml, zexmlss, zesavecommon, zeZippy
+   {$IFNDEF FPC}
+   ,windows
+@@ -83,7 +83,7 @@
+ 
+   TZXLSXRelationsArray = array of TZXLSXRelations;
+ 
+-function ReadXSLXPath(var XMLSS: TZEXMLSS; DirName: string): integer; deprecated {$IFDEF FPC}'Use ReadXLSXPath!'{$ENDIF};
++function ReadXSLXPath(var XMLSS: TZEXMLSS; DirName: string): integer; {$IFDEF FPC} deprecated 'Use ReadXLSXPath!';{$ENDIF}
+ function ReadXLSXPath(var XMLSS: TZEXMLSS; DirName: string): integer;
+ 
+ {$IFDEF FPC}
+@@ -148,7 +148,14 @@
+   AnsiStrings,  // AnsiString targeted overloaded versions of Pos, Trim, etc
+   UITypes,    //  TColorRec record
+ {$EndIf}
+-  StrUtils;
++{$IfDef VER130}
++  duansistr,
++  FileCtrl // func DirectoryExists, ForceDirectories
++{$EndIf}
++{$IfNDef VER130}
++  StrUtils
++{$EndIf}
++  ;
+ 
+ type
+   //шрифт
+@@ -4263,7 +4270,7 @@
+       protected
+          AtomsStore: TStringList; // actually needed elements of style
+ 
+-         function FormulaToXml(const f: string): string;  deprecated; // TODO
++         function FormulaToXml(const f: string): string; {$IfNDef VER130} deprecated; {$EndIf} // TODO
+ 
+          procedure BeforeDestruction; override;
+          procedure AfterConstruction; override;
+@@ -4321,7 +4328,7 @@
+   with xml.Attributes do begin
+ //       Clear; - by parent
+        Add('formatCode', FormulaToXml(AtomsStore[i]), False);
+-       Add('numFmtId', IntToStr(i + Self.XlDelta) );
++       Add('numFmtId', IntToStr(i + integer(Self.XlDelta)) );
+   end;
+   xml.WriteEmptyTag('numFmt', True, False);
+ end;
+@@ -6470,5 +6477,8 @@
+ {$ENDIF}
+ 
+ end.
++
++
++
+ 
+ 
+--- src/zexmlss.pas	Wed Feb 12 11:49:01 2020
++++ src/zexmlss.pas	Wed Sep 29 17:07:34 2021
+@@ -45,7 +45,7 @@
+ type
+   //тип данных ячейки
+   TZCellType = (ZENumber, ZEDateTime, ZEBoolean, ZEString, ZEError);
+-      const ZEAnsiString = ZEString deprecated {$IFDEF USE_DEPRECATED_STRING}'use ZEString'{$ENDIF}; // backward compatibility
++      const ZEAnsiString = ZEString {$IFDEF USE_DEPRECATED_STRING} deprecated 'use ZEString'{$ENDIF}; // backward compatibility
+ type
+   //Стиль начертания линий рамки ячейки
+   TZBorderType = (ZENone, ZEContinuous, ZEDot, ZEDash, ZEDashDot, ZEDashDotDot, ZESlantDashDot, ZEDouble);
+--- src/zexmlssutils.pas	Wed Feb 12 11:49:01 2020
++++ src/zexmlssutils.pas	Wed Sep 29 21:00:09 2021
+@@ -28,14 +28,15 @@
+   {$IFNDEF FPC}
+   Windows,
+   {$ENDIF}
+-  SysUtils, Types, Classes, Grids,
++  SysUtils, {$IfNDef VER130} Types, {$EndIf} Classes, Grids,
+   {$IFNDEF NOZCOLORSTRINGGRID}
+   ZColorStringGrid,
+   {$ENDIF}
+   zexmlss, zsspxml, zesavecommon, graphics
+-//  { $IFDEF VER130},
++  { $IFDEF VER130},
+ //  sysd7
+-//  { $ENDIF}
++  duansistr
++  { $ENDIF}
+   ;
+ 
+ {$IFNDEF NOZCOLORSTRINGGRID}
+--- src/zeZippy.pas	Tue Nov  5 02:16:54 2013
++++ src/zeZippy.pas	Wed Sep 29 22:43:18 2021
+@@ -16,6 +16,14 @@
+    TZxZipGen = class;
+    CZxZipGens = class of TZxZipGen;
+ 
++{$IFDEF VER130} // to be moved into compver.h ???
++{$Define SListBeforeDelphi7 }
++{$EndIf}
++{$IFDEF VER140} // Is this also needed in Delphi/BCB 6 ?
++{$Define SListBeforeDelphi7 }
++{$EndIf}
++
++
+ {$IFDEF FPC}
+     { $IF FPC_FULLVERSION < 20501} //FPC 2.5.1
+       { $DEFINE USE_INTERNAL_SL}
+@@ -108,7 +116,33 @@
+    end;
+ {$ENDIF}
+ 
+-implementation uses TypInfo, Contnrs;
++
++{$IFDEF VER130} // to be moved into compver.h ???
++{$Define FilePathsBeforeDelphi7 }
++{$EndIf}
++{$IFDEF VER140} // Is this also needed in Delphi/BCB 6 ?
++{$Define FilePathsBeforeDelphi7 }
++{$EndIf}
++
++{$IfDef FilePathsBeforeDelphi7}
++const
++  PathDelim = '\';
++{$Else}
++const
++  PathDelim = SysUtils.PathDelim;
++{$EndIf}
++
++resourcestring
++
++//   EZxFolderCreationFailed  = 'Cannot create folder: ';
++   EZxFolderCreationFailed  = 'Невозможно создать папку: ';
++
++implementation
++uses
++{$IfDef FilePathsBeforeDelphi7}
++  FileCtrl, // func ForceDirectories
++{$EndIf}
++   TypInfo, Contnrs;
+ 
+ resourcestring
+ //   EZxCannotOverwriteZip    = 'Cannot remove outdated file %s';
+@@ -131,9 +165,6 @@
+    EZxStreamMustHaveFName   = 'Сжатие Zip: нельзя сохранить безымянный файл';
+    EZxStreamAlreaydAdded    = 'Сжатие Zip: нельзя сохранить два файла с одинаковым именем'#13#10#9'%s';
+ 
+-//   EZxFolderCreationFailed  = 'Cannot create folder: ';
+-   EZxFolderCreationFailed  = 'Невозможно создать папку: ';
+-
+ //   EZxRegisterNonZip        = 'Registering: not a zip generator ' {+ ClassName};
+ //   EZxRegisteredNonZip      = 'Retrieving: not a zip generator ' {+ ClassName};
+    EZxRegisterNonZip        = 'Сжатие Zip: нельзя создавaть Zip с помощью ' {+ ClassName};
+@@ -143,7 +174,9 @@
+ procedure TZxZipGen.AfterConstruction;
+   procedure Tune(const sl: TStringList);
+   begin
++{$IfNDef SListBeforeDelphi7 }
+     sl.CaseSensitive := false;
++{$EndIf}    
+     sl.Duplicates    := dupError;
+     sl.Sorted        := true;
+   end;
+@@ -229,12 +262,12 @@
+ function TZxZipGen.NewStream(const RelativeName: TFileName): TStream;
+ var idx: integer;
+     fname: TFileName;
+- procedure UnifyDelims(const c: char; const PathDelim: char = SysUtils.PathDelim);
++ procedure UnifyDelims(const c: char; const PathDelim: char = PathDelim);
+  begin
+   if PathDelim <> c then
+      fname := StringReplace(fname, c, PathDelim, [rfReplaceAll]);
+ 
+-  while Pos(PathDelim + c, fname)>0 do // ugly, but actually should bever happen! unless bugcheck
++  while Pos(PathDelim + c, fname)>0 do // ugly, but actually should never happen! unless bugcheck
+         fname := StringReplace(fname, PathDelim+PathDelim, PathDelim, [rfReplaceAll]);
+  end;
+ begin
+@@ -365,7 +398,12 @@
+ 
+ function TZxFolderInsteadOfZip.MakeAbsPath(const RelativeName: TFileName):TFileName;
+ begin
+-  Result := ZipFileName + PathDelim + RelativeName
++  // zip (even a lib inside Microsoft Excel) uses standard slashes, not DOS/Win bk-slashes
++  if '/' = PathDelim
++     then Result := RelativeName
++     else Result := StringReplace(RelativeName, '/', PathDelim, [rfReplaceAll]);
++
++  Result := ZipFileName + PathDelim + Result;
+ end;
+ 
+ function TZxFolderInsteadOfZip.DoNewStream(
+@@ -375,7 +413,11 @@
+   fn := MakeAbsPath(RelativeName);
+   ForceDirectories(ExtractFileDir( fn ));
+ 
+-  Result := TFileStream.Create(fn, fmCreate, fmShareExclusive );
++  Result := TFileStream.Create(fn, fmCreate
++{$IfNDef FilePathsBeforeDelphi7 }
++     , fmShareExclusive
++{$EndIf }
++  );
+ end;
+ 
+ function TZxFolderInsteadOfZip.DoSealStream(const Data: TStream; const RelName: TFileName): boolean;
+@@ -434,7 +476,6 @@
+ begin
+   Result := TZxFolderInsteadOfZip;
+ end;
+-
+ 
+ (*********************)
+ {$IFDEF USE_INTERNAL_SL}
+--- src/zsspxml.pas	Tue Nov  5 02:16:54 2013
++++ src/zsspxml.pas	Wed Sep 29 19:02:56 2021
+@@ -26,7 +26,7 @@
+ 
+ uses
+   SysUtils, classes
+-  {$IFDEF VER130}, sysd7 {$ENDIF}
++//  {$IFDEF VER130}, sysd7 {$ENDIF}
+   {$IFDEF USELCONVENCODING}
+   , LConvEncoding
+   {$ENDIF};
+@@ -158,6 +158,7 @@
+     procedure WriteTag(const TagName: ansistring; const Text: ansistring; SAttributes: TZAttributes); overload;
+     procedure WriteTag(const TagName: ansistring; const Text: ansistring; AttrArray: array of TZAttrArray); overload;
+     procedure WriteTag(const TagName: ansistring; const Text: ansistring); overload;
++    procedure WriteTag(const TagName: ansistring; const IntVal: Integer); overload;
+     procedure WriteTagNode(const TagName: ansistring; SAttributes: TZAttributes; StartNewLine: boolean; CloseTagNewLine: boolean; CheckEntity: boolean = true); overload;
+     procedure WriteTagNode(const TagName: ansistring; AttrArray: array of TZAttrArray; StartNewLine: boolean; CloseTagNewLine: boolean; CheckEntity: boolean {$IFDEF VER130}{$ELSE} = true{$ENDIF}); overload;
+     procedure WriteTagNode(const TagName: ansistring; StartNewLine: boolean; CloseTagNewLine: boolean; CheckEntity: boolean = true); overload;
+@@ -509,10 +510,10 @@
+ 
+ implementation
+ 
+-{$IFDEF DELPHI_UNICODE}
++//{$IFDEF DELPHI_UNICODE}
+ uses
+   duansistr;
+-{$ENDIF}
++//{$ENDIF}
+ 
+ //// читатели
+ 
+@@ -783,6 +784,13 @@
+   {$ENDIF}
+ end;
+ 
++{$IFDEF VER130} // to be moved into compver.h ???
++{$Define UnicodeBeforeDelphi7 }
++{$EndIf}
++{$IFDEF VER140} // Is this also needed in Delphi/BCB 6 ?
++{$Define UnicodeBeforeDelphi7 }
++{$EndIf}
++
+ function conv_UTF16LEToLocal(const Text: ansistring): ansistring;
+ var
+   ws: WideString;
+@@ -802,7 +810,7 @@
+     inc(i, 2);
+   end;
+   {$IFNDEF DELPHI_UNICODE}
+-  result := WideCharToString(PwideChar(WS));
++  result := WideCharToString( {$IfNDef UnicodeBeforeDelphi7} PwideChar {$EndIf} (WS));
+   {$ELSE}
+   result := UTF8Encode(PWideChar(WS));
+   {$ENDIF}
+@@ -813,7 +821,6 @@
+   ws: WideString;
+   w: word;
+   i, l: integer;
+-
+ begin
+   ws := '';
+   i := 2;
+@@ -827,7 +834,7 @@
+     inc(i, 2);
+   end;
+   {$IFNDEF DELPHI_UNICODE}
+-  result := WideCharToString(PwideChar(WS));
++  result := WideCharToString( {$IfNDef UnicodeBeforeDelphi7} PwideChar {$EndIf} (WS));
+   {$ELSE}
+   result := UTF8Encode(PWideChar(WS));
+   {$ENDIF}
+@@ -1989,6 +1996,12 @@
+ procedure TZsspXMLWriter.WriteTag(const TagName: ansistring; const Text: ansistring);
+ begin
+   WriteTag(TagName, Text, Attributes, true, false, true);
++end;
++
++procedure TZsspXMLWriter.WriteTag(const TagName: ansistring;
++  const IntVal: Integer);
++begin
++  WriteTag(TagName, IntToStr(IntVal));
+ end;
+ 
+ //Записать корневой/узловой элемент
